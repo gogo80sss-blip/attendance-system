@@ -10,15 +10,12 @@
     body {
       font-family: 'Hiragino Kaku Gothic Pro', 'Meiryo', sans-serif;
       background: linear-gradient(135deg, #E3F2FD, #E8F5E9);
-      min-height: 100vh;
-      display: flex; align-items: center; justify-content: center; padding: 16px;
+      min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 16px;
     }
     .card {
       background: white; border-radius: 28px; padding: 28px 20px; text-align: center;
       box-shadow: 0 12px 40px rgba(0,0,0,0.12); max-width: 400px; width: 100%;
     }
-    #startView .logo { font-size: 48px; margin-bottom: 10px; }
-    #startView .title { font-size: 20px; font-weight: bold; color: #333; margin-bottom: 4px; }
     #startBtn {
       background: #4472C4; color: white; border: none; border-radius: 16px;
       font-size: 20px; font-weight: bold; padding: 18px; width: 100%; cursor: pointer;
@@ -54,9 +51,9 @@
 <body>
 <div class="card">
   <div id="startView">
-    <div class="logo">🌸</div>
-    <div class="title">カトレヤこども園</div>
-    <div class="subtitle" style="font-size:12px; color:#999; margin-bottom:24px;">登降園管理システム</div>
+    <div style="font-size:48px; margin-bottom:10px;">🌸</div>
+    <div style="font-size:20px; font-weight:bold; color:#333;">カトレヤこども園</div>
+    <div style="font-size:12px; color:#999; margin-bottom:24px;">登降園管理システム</div>
     <button id="startBtn" onclick="startSystem()">📷 開始</button>
   </div>
   <div id="cameraView">
@@ -65,7 +62,7 @@
       <canvas id="canvas" style="display:none"></canvas>
       <div class="scan-line"></div>
     </div>
-    <div id="clock"></div>
+    <div id="clock">--:--</div>
     <div id="debug">準備中...</div>
   </div>
   <div id="resultView">
@@ -133,7 +130,6 @@
     const video = document.getElementById('video');
     const canvas = document.getElementById('canvas');
     
-    // ビデオが準備できており、かつ処理中でない場合のみ解析
     if (video.readyState === video.HAVE_ENOUGH_DATA && !processing) {
       const ctx = canvas.getContext('2d', { willReadFrequently: true });
       canvas.width = video.videoWidth;
@@ -141,25 +137,31 @@
       ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
       
       const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-      const code = jsQR(imageData.data, imageData.width, imageData.height, { inversionAttempts: "dontInvert" });
+      const code = jsQR(imageData.data, imageData.width, imageData.height);
 
       if (code && code.data) {
-        log('検出！解析中...');
         handleQRCode(code.data);
       }
     }
     requestAnimationFrame(scanLoop);
   }
 
-  function handleQRCode(url) {
+  function handleQRCode(data) {
     const now = Date.now();
-    const match = url.match(/[?&]id=(\d+)/);
-    if (match) {
-      const id = match[1];
-      if (id !== lastId || now - lastTime > 5000) { // 5秒間は同一IDを無視
-        lastId = id; lastTime = now;
-        processId(id);
-      }
+    if (!data) return;
+
+    // 5秒間は同一内容の読み取りを無視（チャタリング防止）
+    if (data !== lastId || now - lastTime > 5000) {
+      lastId = data; 
+      lastTime = now;
+      
+      log('検出中: ' + data);
+
+      // URLからid=数字を抜き出す。なければ中身をそのまま使う
+      const match = data.match(/[?&]id=([^&]+)/);
+      const idToSend = match ? match[1] : data;
+      
+      processId(idToSend);
     }
   }
 
@@ -167,12 +169,23 @@
     processing = true;
     log('ID:' + id + ' 送信中...');
     try {
-      const response = await fetch(GAS_URL + '?mode=result&id=' + id);
-      const data = await response.json();
-      if (data.error) showError(data.error);
-      else showResult(data);
+      // タイムアウト付きのフェッチ（10秒で諦める）
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 10000);
+
+      const response = await fetch(GAS_URL + '?mode=result&id=' + id, { signal: controller.signal });
+      const responseData = await response.json();
+      
+      clearTimeout(timeoutId);
+
+      if (responseData.error) {
+        showError(responseData.error);
+      } else {
+        showResult(responseData);
+      }
     } catch (err) {
-      showError('通信エラー。ネット接続を確認してください');
+      log('エラー詳細: ' + err.message);
+      showError('送信に失敗しました。ネット環境を確認してください');
     }
   }
 

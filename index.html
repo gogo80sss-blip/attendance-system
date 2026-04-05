@@ -3,134 +3,75 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>カトレヤこども園　登降園管理</title>
+  <title>カトレヤこども園 最終テスト</title>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jsQR/1.4.0/jsQR.min.js"></script>
   <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    body {
-      font-family: 'Hiragino Kaku Gothic Pro', 'Meiryo', sans-serif;
-      background: linear-gradient(135deg, #E3F2FD, #E8F5E9);
-      min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 16px;
-    }
-    .card {
-      background: white; border-radius: 28px; padding: 28px 20px; text-align: center;
-      box-shadow: 0 12px 40px rgba(0,0,0,0.12); max-width: 400px; width: 100%;
-    }
-    #startBtn {
-      background: #4472C4; color: white; border: none; border-radius: 16px;
-      font-size: 20px; font-weight: bold; padding: 18px; width: 100%; cursor: pointer;
-    }
-    #cameraView { display: none; }
-    #videoWrap {
-      position: relative; width: 100%; border-radius: 12px; overflow: hidden;
-      background: #000; margin-bottom: 8px;
-    }
-    #video { width: 100%; display: block; max-height: 260px; object-fit: cover; }
-    .scan-line {
-      position: absolute; left: 0; right: 0; height: 3px;
-      background: rgba(68,114,196,0.9); animation: scan 2s ease-in-out infinite;
-    }
-    @keyframes scan { 0%{top:5%} 50%{top:90%} 100%{top:5%} }
-    #clock { font-size: 40px; font-weight: bold; color: #ccc; margin: 8px 0; }
-    #debug {
-      background: #f5f5f5; border-radius: 8px; padding: 10px; font-size: 11px;
-      color: #666; text-align: left; margin-top: 8px; min-height: 60px; word-break: break-all;
-    }
-    #resultView { display: none; }
-    #resultView .emoji { font-size: 56px; margin-bottom: 8px; }
-    #resultView .name { font-size: 26px; font-weight: bold; color: #333; }
-    #resultView .badge {
-      display: inline-block; color: white; font-size: 18px; font-weight: bold;
-      padding: 8px 24px; border-radius: 50px; margin: 10px 0;
-    }
-    .timer-bar { height: 4px; background: #eee; border-radius: 2px; overflow: hidden; }
-    #timerFill { height: 100%; border-radius: 2px; width: 0%; }
-    #errorView { display: none; }
+    body { font-family: sans-serif; text-align: center; background: #f0f0f0; margin: 0; padding: 20px; }
+    #video { width: 100%; max-width: 400px; border: 2px solid #333; border-radius: 10px; }
+    #debug { background: #333; color: #0f0; padding: 15px; margin-top: 10px; font-family: monospace; font-size: 12px; text-align: left; min-height: 100px; }
+    #startBtn { padding: 20px; font-size: 20px; background: #4472C4; color: white; border: none; border-radius: 10px; width: 100%; cursor: pointer; }
+    #resultView { display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:white; padding-top:50px; z-index:100; }
   </style>
 </head>
 <body>
-<div class="card">
-  <div id="startView">
-    <div style="font-size:48px; margin-bottom:10px;">🌸</div>
-    <div style="font-size:20px; font-weight:bold; color:#333;">カトレヤこども園</div>
-    <div style="font-size:12px; color:#999; margin-bottom:24px;">登降園管理システム</div>
-    <button id="startBtn" onclick="startSystem()">📷 開始</button>
-  </div>
-  <div id="cameraView">
-    <div id="videoWrap">
-      <video id="video" autoplay playsinline muted></video>
-      <canvas id="canvas" style="display:none"></canvas>
-      <div class="scan-line"></div>
-    </div>
-    <div id="clock">--:--</div>
-    <div id="debug">準備中...</div>
-  </div>
-  <div id="resultView">
-    <div class="emoji" id="resEmoji"></div>
-    <div class="name" id="resName"></div>
-    <div class="greeting" id="resGreeting" style="font-size:14px; color:#888; margin-bottom:12px;"></div>
-    <div class="badge" id="resBadge"></div>
-    <div class="time" id="resTime" style="font-size:24px; font-weight:bold; margin-bottom:4px;"></div>
-    <div class="class-name" id="resClass" style="font-size:12px; color:#bbb; margin-bottom:12px;"></div>
-    <div class="timer-bar"><div id="timerFill"></div></div>
-  </div>
-  <div id="errorView">
-    <div style="font-size:44px;">⚠️</div>
-    <div id="errMsg" style="font-size:13px; color:#666; margin-top:10px;"></div>
-  </div>
+
+<div id="startView">
+  <h1>🌸 カトレヤこども園</h1>
+  <button id="startBtn" onclick="init()">📷 カメラ開始</button>
+</div>
+
+<div id="mainView" style="display:none;">
+  <video id="video" autoplay playsinline muted></video>
+  <canvas id="canvas" style="display:none;"></canvas>
+  <div id="debug">初期化中...</div>
+  <button onclick="processId('099')" style="margin-top:20px; padding:10px; background:#ff4444; color:white; border:none; border-radius:5px;">テスト送信(099)</button>
+</div>
+
+<div id="resultView" id="resPanel">
+  <h1 id="resName">読み込み中...</h1>
+  <div id="resMsg" style="font-size:24px;"></div>
+  <p>3秒後に戻ります</p>
 </div>
 
 <script>
   const GAS_URL = 'https://script.google.com/macros/s/AKfycbzVc8sxELmKBLCu0NRLdukr7B2ydrdlGZbxMY68pKvLWPmpxSSEEh7d_ijRboJi3WBxKw/exec';
   let audioCtx = null;
   let processing = false;
-  let lastId = '';
-  let lastTime = 0;
-  let timerID = null;
+  let count = 0;
 
   function log(msg) {
-    const el = document.getElementById('debug');
-    if (el) el.textContent = msg;
-    console.log(msg);
+    document.getElementById('debug').innerHTML = msg + "<br>" + document.getElementById('debug').innerHTML;
   }
 
-  function updateClock() {
-    const now = new Date();
-    document.getElementById('clock').textContent = 
-      String(now.getHours()).padStart(2,'0') + ':' + String(now.getMinutes()).padStart(2,'0');
-  }
-  setInterval(updateClock, 1000);
-
-  async function startSystem() {
-    try {
-      audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-      if (audioCtx.state === 'suspended') await audioCtx.resume();
-      log('音声を有効化しました。カメラを起動します...');
-    } catch(e) { log('音声エラー: ' + e.message); }
-
+  async function init() {
     document.getElementById('startView').style.display = 'none';
-    document.getElementById('cameraView').style.display = 'block';
-    updateClock();
-
+    document.getElementById('mainView').style.display = 'block';
+    
+    // 音声の準備
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
       const video = document.getElementById('video');
       video.srcObject = stream;
+      // iPhone Safari向けの対策
       video.setAttribute("playsinline", true);
-      await video.play();
-      log('スキャン中... QRをかざしてください');
-      requestAnimationFrame(scanLoop);
-    } catch(e) {
-      log('カメラエラー: ' + e.message);
-      alert('カメラが起動できません');
+      video.play();
+      log("カメラ起動完了。解析を開始します。");
+      requestAnimationFrame(tick);
+    } catch (err) {
+      log("エラー: " + err.message);
     }
   }
 
-  function scanLoop() {
+  function tick() {
     const video = document.getElementById('video');
     const canvas = document.getElementById('canvas');
     
     if (video.readyState === video.HAVE_ENOUGH_DATA && !processing) {
+      count++;
+      if (count % 30 === 0) log("解析中... [" + count + "]"); // 動きを確認するためのカウンター
+
       const ctx = canvas.getContext('2d', { willReadFrequently: true });
       canvas.width = video.videoWidth;
       canvas.height = video.videoHeight;
@@ -139,117 +80,73 @@
       const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
       const code = jsQR(imageData.data, imageData.width, imageData.height);
 
-      if (code && code.data) {
-        handleQRCode(code.data);
+      if (code) {
+        log("QR検出！内容: " + code.data);
+        // URLからIDを抽出
+        const match = code.data.match(/[?&]id=([^&]+)/);
+        const id = match ? match[1] : code.data;
+        processId(id);
       }
     }
-    requestAnimationFrame(scanLoop);
-  }
-
-  function handleQRCode(data) {
-    const now = Date.now();
-    if (!data) return;
-
-    // 5秒間は同一内容の読み取りを無視（チャタリング防止）
-    if (data !== lastId || now - lastTime > 5000) {
-      lastId = data; 
-      lastTime = now;
-      
-      log('検出中: ' + data);
-
-      // URLからid=数字を抜き出す。なければ中身をそのまま使う
-      const match = data.match(/[?&]id=([^&]+)/);
-      const idToSend = match ? match[1] : data;
-      
-      processId(idToSend);
-    }
+    requestAnimationFrame(tick);
   }
 
   async function processId(id) {
+    if (processing) return;
     processing = true;
-    log('ID:' + id + ' 送信中...');
+    log("ID: " + id + " をGASへ送信します...");
+
     try {
-      // タイムアウト付きのフェッチ（10秒で諦める）
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 10000);
-
-      const response = await fetch(GAS_URL + '?mode=result&id=' + id, { signal: controller.signal });
-      const responseData = await response.json();
+      const res = await fetch(GAS_URL + "?mode=result&id=" + id);
+      const data = await res.json();
       
-      clearTimeout(timeoutId);
-
-      if (responseData.error) {
-        showError(responseData.error);
+      if (data.error) {
+        log("GASエラー: " + data.error);
+        alert("エラー: " + data.error);
+        processing = false;
       } else {
-        showResult(responseData);
+        showResult(data);
       }
     } catch (err) {
-      log('エラー詳細: ' + err.message);
-      showError('送信に失敗しました。ネット環境を確認してください');
+      log("通信エラー: " + err.message);
+      alert("通信に失敗しました。");
+      processing = false;
     }
   }
 
   function showResult(d) {
-    const isLogin = d.type === '登園';
-    const accent = isLogin ? '#FF9800' : '#4CAF50';
-    const honorific = d.gender === '男' ? 'くん' : 'ちゃん';
-
-    document.getElementById('resEmoji').textContent = isLogin ? '🌸' : '🏠';
-    document.getElementById('resName').textContent = d.name + ' ' + honorific;
-    document.getElementById('resGreeting').textContent = isLogin ? 'おはようございます！' : 'また明日ね！';
-    document.getElementById('resBadge').textContent = d.type + 'しました ✅';
-    document.getElementById('resBadge').style.background = accent;
-    document.getElementById('resTime').textContent = d.time;
-    document.getElementById('resTime').style.color = accent;
-    document.getElementById('resClass').textContent = d.cls + '（' + d.grade + '）';
-
-    document.getElementById('cameraView').style.display = 'none';
+    document.getElementById('resName').innerText = d.name + " さん";
+    document.getElementById('resMsg').innerText = d.type + "完了 (" + d.time + ")";
     document.getElementById('resultView').style.display = 'block';
+    
+    playTone(d.type);
 
-    playMagicSound(d.gender, d.type);
-
-    const fill = document.getElementById('timerFill');
-    fill.style.transition = 'none'; fill.style.width = '100%'; fill.style.background = accent;
-    setTimeout(() => { fill.style.transition = 'width 3s linear'; fill.style.width = '0%'; }, 50);
-
-    if (timerID) clearTimeout(timerID);
-    timerID = setTimeout(showCamera, 3000);
+    setTimeout(() => {
+      document.getElementById('resultView').style.display = 'none';
+      processing = false;
+      log("スキャン再開");
+    }, 3000);
   }
 
-  function showCamera() {
-    document.getElementById('resultView').style.display = 'none';
-    document.getElementById('errorView').style.display = 'none';
-    document.getElementById('cameraView').style.display = 'block';
-    processing = false;
-    log('スキャン中... QRをかざしてください');
-  }
-
-  function showError(msg) {
-    document.getElementById('errMsg').textContent = msg;
-    document.getElementById('cameraView').style.display = 'none';
-    document.getElementById('errorView').style.display = 'block';
-    if (timerID) clearTimeout(timerID);
-    timerID = setTimeout(showCamera, 3000);
-  }
-
-  function playMagicSound(gender, type) {
+  function playTone(type) {
     if (!audioCtx) return;
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.connect(gain);
+    gain.connect(audioCtx.destination);
+    
     const now = audioCtx.currentTime;
-    let baseFreq = (type === '登園') ? 660 : 440;
-    if (gender === '女') baseFreq *= 1.2;
-
-    for (let i = 0; i < 3; i++) {
-      const osc = audioCtx.createOscillator();
-      const gain = audioCtx.createGain();
-      osc.type = 'sine';
-      const startFreq = baseFreq + (i * 220);
-      osc.frequency.setValueAtTime(startFreq, now + (i * 0.1));
-      osc.frequency.exponentialRampToValueAtTime(startFreq * 2, now + (i * 0.1) + 0.4);
-      gain.gain.setValueAtTime(0.2, now + (i * 0.1));
-      gain.gain.exponentialRampToValueAtTime(0.001, now + (i * 0.1) + 0.5);
-      osc.connect(gain); gain.connect(audioCtx.destination);
-      osc.start(now + (i * 0.1)); osc.stop(now + (i * 0.1) + 0.5);
+    if (type === '登園') {
+      osc.frequency.setValueAtTime(660, now);
+      osc.frequency.exponentialRampToValueAtTime(1320, now + 0.4);
+    } else {
+      osc.frequency.setValueAtTime(880, now);
+      osc.frequency.exponentialRampToValueAtTime(440, now + 0.4);
     }
+    gain.gain.setValueAtTime(0.2, now);
+    gain.gain.exponentialRampToValueAtTime(0.01, now + 0.4);
+    osc.start();
+    osc.stop(now + 0.4);
   }
 </script>
 </body>

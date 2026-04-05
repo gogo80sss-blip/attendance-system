@@ -3,33 +3,110 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>カトレヤこども園 確定版</title>
+  <title>カトレヤこども園 登降園管理</title>
   <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
   <style>
-    body { font-family: sans-serif; margin: 0; padding: 20px; background: #f0f0f0; text-align: center; }
-    #video { width: 100%; max-width: 400px; background: #000; border-radius: 10px; }
-    #debug { background: #222; color: #0f0; padding: 10px; margin-top: 10px; text-align: left; font-size: 11px; min-height: 100px; white-space: pre-wrap; }
-    #btn { padding: 20px; font-size: 20px; width: 100%; background: #4472C4; color: white; border: none; border-radius: 10px; }
+    :root {
+      --main-pink: #FFB7C5; /* さくら色 */
+      --main-blue: #A1C4FD; /* そら色 */
+      --accent-orange: #FF9E2C;
+      --accent-green: #7BC67B;
+      --text-color: #5A4A42;
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: 'Hiragino Maru Gothic ProN', 'Meiryo', sans-serif;
+      background: linear-gradient(135deg, #FFF5F7 0%, #F0F7FF 100%);
+      min-height: 100vh;
+      display: flex; align-items: center; justify-content: center;
+      color: var(--text-color);
+    }
+    .container {
+      width: 90%; max-width: 400px;
+      background: white; border-radius: 40px;
+      padding: 30px 20px; text-align: center;
+      box-shadow: 0 15px 35px rgba(255, 183, 197, 0.3);
+      border: 6px solid white;
+    }
+    /* ロゴのアニメーション */
+    .logo-img { font-size: 60px; display: inline-block; animation: fuwafuwa 3s ease-in-out infinite; }
+    @keyframes fuwafuwa {
+      0%, 100% { transform: translateY(0) rotate(0deg); }
+      50% { transform: translateY(-10px) rotate(5deg); }
+    }
+    h1 { font-size: 22px; margin: 10px 0 5px; color: #D87093; }
+    .subtitle { font-size: 13px; color: #999; margin-bottom: 25px; }
+
+    /* ボタンデザイン */
+    #btn {
+      background: linear-gradient(to bottom, #FFB7C5, #FF8E9D);
+      color: white; border: none; border-radius: 30px;
+      padding: 18px; width: 100%; font-size: 20px; font-weight: bold;
+      box-shadow: 0 6px 0 #E57381; cursor: pointer; transition: 0.2s;
+    }
+    #btn:active { transform: translateY(4px); box-shadow: 0 2px 0 #E57381; }
+    #btn:disabled { background: #ccc; box-shadow: 0 4px 0 #999; opacity: 0.6; }
+
+    /* ビデオエリア */
+    #scanView { display: none; }
+    .video-container {
+      position: relative; width: 100%; border-radius: 25px;
+      overflow: hidden; border: 8px solid var(--main-pink);
+      background: #eee; margin-bottom: 15px;
+    }
+    #video { width: 100%; display: block; object-fit: cover; }
+    .scan-guide {
+      position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+      width: 70%; height: 70%; border: 2px dashed rgba(255,255,255,0.5); border-radius: 20px;
+    }
+
     /* 通知用オーバーレイ */
     #msgOverlay { 
-      display: none; position: fixed; top: 20%; left: 10%; width: 80%; 
-      background: rgba(0,0,0,0.8); color: white; padding: 20px; 
-      border-radius: 15px; font-size: 24px; font-weight: bold; z-index: 1000; 
+      display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+      background: rgba(255,255,255,0.95); z-index: 1000;
+      flex-direction: column; align-items: center; justify-content: center;
     }
+    .res-card {
+      background: white; border-radius: 30px; padding: 30px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.1); width: 85%;
+    }
+    .res-emoji { font-size: 80px; margin-bottom: 10px; }
+    .res-name { font-size: 28px; font-weight: bold; margin-bottom: 10px; }
+    .res-type {
+      display: inline-block; padding: 10px 30px; border-radius: 50px;
+      color: white; font-size: 20px; font-weight: bold;
+    }
+
+    #debug { font-size: 11px; color: #aaa; margin-top: 10px; }
   </style>
 </head>
 <body>
 
-<div id="startView">
-  <h2>🌸 カトレヤこども園</h2>
-  <button id="btn" onclick="start()" disabled>準備中...</button>
+<div class="container" id="startView">
+  <div class="logo-img">🌸</div>
+  <h1>カトレヤこども園</h1>
+  <div class="subtitle">おうえん・おかえり 管理</div>
+  <div id="loadingStatus" style="font-size:11px; color:#FF8E9D; margin-bottom:10px;">じゅんび中...</div>
+  <button id="btn" onclick="start()" disabled>📷 カメラをはじめる</button>
 </div>
 
-<div id="scanView" style="display:none;">
-  <video id="video" autoplay playsinline muted></video>
-  <canvas id="canvas" style="display:none;"></canvas>
-  <div id="msgOverlay"></div>
-  <div id="debug">スキャン待機中...</div>
+<div class="container" id="scanView">
+  <div class="video-container">
+    <video id="video" autoplay playsinline muted></video>
+    <div class="scan-guide"></div>
+  </div>
+  <div style="font-size: 14px; font-weight: bold; color: var(--main-pink);">QRコードをみせてね</div>
+  <div id="debug">スキャンたいき中...</div>
+  <button onclick="location.reload()" style="background:none; border:none; color:#bbb; margin-top:15px; font-size:12px; text-decoration:underline;">やりなおす</button>
+</div>
+
+<div id="msgOverlay">
+  <div class="res-card">
+    <div class="res-emoji" id="resEmoji">🌸</div>
+    <div class="res-name" id="resName">〇〇 さん</div>
+    <div id="resType" class="res-type">登園完了</div>
+    <div id="resTime" style="margin-top:15px; font-size:18px; color:#888;">00:00</div>
+  </div>
 </div>
 
 <script>
@@ -42,14 +119,14 @@
     if (typeof jsQR !== 'undefined') {
       clearInterval(checkLib);
       const btn = document.getElementById('btn');
-      btn.disabled = false; btn.innerText = "📷 スキャン開始";
+      btn.disabled = false; btn.innerText = "📷 カメラをはじめる";
+      document.getElementById('loadingStatus').style.display = "none";
     }
   }, 500);
 
   async function start() {
     document.getElementById('startView').style.display = 'none';
     document.getElementById('scanView').style.display = 'block';
-    
     audioCtx = new (window.AudioContext || window.webkitAudioContext)();
     
     try {
@@ -58,20 +135,20 @@
       video.srcObject = stream;
       video.onloadedmetadata = () => {
         video.play();
-        setInterval(analyze, 300); // 0.3秒間隔で解析
+        setInterval(analyze, 300);
       };
-    } catch(e) { alert("カメラ起動失敗"); }
+    } catch(e) { alert("カメラが使えません"); }
   }
 
   function analyze() {
     if (isProcessing) return;
     const video = document.getElementById('video');
-    const canvas = document.getElementById('canvas');
+    const canvas = document.createElement('canvas');
     if (video.readyState !== video.HAVE_ENOUGH_DATA) return;
 
-    const ctx = canvas.getContext('2d', {willReadFrequently: true});
     canvas.width = video.videoWidth;
     canvas.height = video.videoHeight;
+    const ctx = canvas.getContext('2d', {willReadFrequently: true});
     ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
     const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
     const code = jsQR(imgData.data, imgData.width, imgData.height);
@@ -84,45 +161,66 @@
 
   async function sendData(id) {
     isProcessing = true;
-    showStatus("送信中...");
+    document.getElementById('debug').innerText = "かくにん中...";
 
     try {
       const res = await fetch(GAS_URL + "?mode=result&id=" + id);
       const data = await res.json();
       
       if (data.error) {
-        showStatus("エラー: " + data.error, 3000);
+        alert(data.error);
+        isProcessing = false;
       } else {
-        showStatus(data.name + " さん\n" + data.type + "完了！", 3000);
-        playBell();
+        showResult(data);
+        playBell(data.type);
       }
     } catch(e) {
-      showStatus("通信エラー", 3000);
-    }
-    
-    // 3秒後にスキャンを強制再開（ここが重要）
-    setTimeout(() => {
+      alert("通信エラー");
       isProcessing = false;
-      document.getElementById('msgOverlay').style.display = 'none';
-    }, 3000);
+    }
   }
 
-  function showStatus(txt, duration = 0) {
+  function showResult(d) {
+    const isLogin = d.type === '登園';
     const overlay = document.getElementById('msgOverlay');
-    overlay.innerText = txt;
-    overlay.style.display = 'block';
+    const typeTag = document.getElementById('resType');
+    
+    document.getElementById('resEmoji').innerText = isLogin ? '🌸' : '🏠';
+    document.getElementById('resName').innerText = d.name + (d.gender === '男' ? ' くん' : ' ちゃん');
+    typeTag.innerText = d.type + "完了！";
+    typeTag.style.background = isLogin ? 'var(--accent-orange)' : 'var(--accent-green)';
+    document.getElementById('resTime').innerText = d.time;
+    
+    overlay.style.display = 'flex';
+
+    setTimeout(() => {
+      overlay.style.display = 'none';
+      isProcessing = false;
+      document.getElementById('debug').innerText = "スキャンたいき中...";
+    }, 3500);
   }
 
-  function playBell() {
+  function playBell(type) {
     if (!audioCtx) return;
     if (audioCtx.state === 'suspended') audioCtx.resume();
-    const osc = audioCtx.createOscillator();
+    const now = audioCtx.currentTime;
+    
+    // 登園は上昇音、降園は落ち着いた和音
+    const osc1 = audioCtx.createOscillator();
     const gain = audioCtx.createGain();
-    osc.connect(gain); gain.connect(audioCtx.destination);
-    osc.frequency.setValueAtTime(880, audioCtx.currentTime);
-    osc.frequency.exponentialRampToValueAtTime(440, audioCtx.currentTime + 0.5);
-    gain.gain.linearRampToValueAtTime(0, audioCtx.currentTime + 0.5);
-    osc.start(); osc.stop(audioCtx.currentTime + 0.5);
+    osc1.connect(gain); gain.connect(audioCtx.destination);
+    
+    if (type === '登園') {
+      osc1.frequency.setValueAtTime(523.25, now); // C5
+      osc1.frequency.exponentialRampToValueAtTime(1046.50, now + 0.4); // C6
+    } else {
+      osc1.frequency.setValueAtTime(659.25, now); // E5
+      osc1.frequency.exponentialRampToValueAtTime(523.25, now + 0.4); // C5
+    }
+    
+    gain.gain.setValueAtTime(0.2, now);
+    gain.gain.exponentialRampToValueAtTime(0.01, now + 0.4);
+    osc1.start(); osc1.stop(now + 0.4);
   }
 </script>
 </body>

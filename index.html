@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>カトレヤこども園 接続テスト</title>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/jsQR/1.4.0/jsQR.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
   <style>
     body { font-family: sans-serif; margin: 0; padding: 20px; background: #f0f0f0; text-align: center; }
     #video { width: 100%; max-width: 400px; background: #000; border-radius: 10px; }
@@ -16,11 +16,12 @@
 
 <div id="startView">
   <h2>🌸 カトレヤこども園</h2>
-  <button id="btn" onclick="start()">📷 カメラを開始する</button>
+  <div id="loadingMsg" style="color:red; margin-bottom:10px;">ライブラリ準備中...</div>
+  <button id="btn" onclick="start()" disabled>📷 カメラを開始する</button>
 </div>
 
 <div id="scanView" style="display:none;">
-  <video id="video" autoplay playsinline muted></video>
+  <video id="video" autoplay playsinline muted></button>
   <canvas id="canvas" style="display:none;"></canvas>
   <div id="debug">ログ待機中...</div>
   <button onclick="location.reload()" style="margin-top:10px; padding:10px;">🔄 やり直す</button>
@@ -32,52 +33,60 @@
   let isProcessing = false;
   let debugEl = null;
 
+  // ライブラリが読み込まれたかチェックする
+  const checkLibrary = setInterval(() => {
+    if (typeof jsQR !== 'undefined') {
+      clearInterval(checkLibrary);
+      const btn = document.getElementById('btn');
+      btn.disabled = false;
+      btn.innerText = "📷 カメラを開始する";
+      document.getElementById('loadingMsg').style.display = "none";
+    }
+  }, 500);
+
   function writeLog(msg) {
     if (!debugEl) debugEl = document.getElementById('debug');
     debugEl.innerText = msg + "\n" + debugEl.innerText;
   }
 
   async function start() {
+    // 念押しチェック
+    if (typeof jsQR === 'undefined') {
+      alert("ライブラリの読み込みが完了していません。少し待ってから押し直してください。");
+      return;
+    }
+
     document.getElementById('startView').style.display = 'none';
     document.getElementById('scanView').style.display = 'block';
     writeLog("開始ボタンが押されました");
 
-    // 音声の初期化
     try {
       audioCtx = new (window.AudioContext || window.webkitAudioContext)();
       if (audioCtx.state === 'suspended') await audioCtx.resume();
       writeLog("音声OK");
     } catch(e) { writeLog("音声エラー: " + e.message); }
 
-    // カメラの起動
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
         video: { facingMode: 'environment' }
       });
       const video = document.getElementById('video');
       video.srcObject = stream;
-      writeLog("カメラ映像を取得中...");
       
-      // ビデオが再生可能になるまで待つ
       video.onloadedmetadata = () => {
         video.play();
         writeLog("ビデオ再生開始。解析ループを起動します...");
-        // 0.2秒ごとに強制的に解析を行う
-        setInterval(analyze, 200);
+        setInterval(analyze, 250); // 負荷を抑えるため0.25秒間隔
       };
     } catch(e) {
-      writeLog("カメラエラー: " + e.name + " / " + e.message);
-      alert("カメラを起動できません。設定を確認してください。");
+      writeLog("カメラエラー: " + e.message);
     }
   }
 
   function analyze() {
     if (isProcessing) return;
-    
     const video = document.getElementById('video');
     const canvas = document.getElementById('canvas');
-    
-    // 映像がまだ来ていなければスキップ
     if (video.readyState !== video.HAVE_ENOUGH_DATA) return;
 
     try {
@@ -87,6 +96,8 @@
       ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
       
       const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      
+      // ここでjsQRを呼び出す
       const code = jsQR(imageData.data, imageData.width, imageData.height);
 
       if (code) {
@@ -110,18 +121,17 @@
       
       if (data.error) {
         alert("エラー: " + data.error);
+        isProcessing = false;
       } else {
         writeLog("送信成功: " + data.name);
         alert(data.name + " さん、" + data.type + "完了しました！");
-        // 音を鳴らす
         playBell();
+        setTimeout(() => { isProcessing = false; }, 3000);
       }
     } catch(e) {
       writeLog("送信エラー: " + e.message);
       alert("通信に失敗しました。");
-    } finally {
-      // 3秒後に再開
-      setTimeout(() => { isProcessing = false; }, 3000);
+      isProcessing = false;
     }
   }
 

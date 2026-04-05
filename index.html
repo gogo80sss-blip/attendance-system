@@ -72,9 +72,9 @@
 <body>
 
 <div class="container" id="startView">
-  <div class="logo-img">🌸</div>
+  <div class="logo-img">🐣</div>
   <h1>カトレヤこども園</h1>
-  <div style="font-size: 13px; color: #999; margin-bottom: 25px;">おうえん・おかえり 管理</div>
+  <div style="font-size: 13px; color: #999; margin-bottom: 25px;">ピヨピヨ管理システム</div>
   <button id="btn" onclick="start()" disabled>読み込み中...</button>
 </div>
 
@@ -157,7 +157,7 @@
         isProcessing = false;
       } else {
         showResult(data);
-        playMagicSound(data.type);
+        playPiyoSound(data.type);
       }
     } catch(e) {
       alert("通信エラー");
@@ -170,7 +170,7 @@
     const overlay = document.getElementById('msgOverlay');
     const typeTag = document.getElementById('resType');
     
-    document.getElementById('resEmoji').innerText = isLogin ? '🌸' : '🏠';
+    document.getElementById('resEmoji').innerText = isLogin ? '🐣' : '🏠';
     document.getElementById('resName').innerText = d.name + (d.gender === '男' ? ' くん' : ' ちゃん');
     typeTag.innerText = d.type + "完了！";
     typeTag.style.background = isLogin ? 'var(--accent-orange)' : 'var(--accent-green)';
@@ -185,33 +185,41 @@
     }, 3500);
   }
 
-  function playMagicSound(type) {
+  function playPiyoSound(type) {
     if (!audioCtx) return;
     if (audioCtx.state === 'suspended') audioCtx.resume();
+    
     const now = audioCtx.currentTime;
-
-    // 音の高さ（周波数）の設定
-    const notes = type === '登園' 
-      ? [523.25, 659.25, 783.99, 1046.50] // ド・ミ・ソ・ド（上昇）
-      : [783.99, 698.46, 659.25, 587.33, 523.25]; // ソ・ファ・ミ・レ・ド（下降）
-
-    notes.forEach((freq, i) => {
+    const isLogin = (type === '登園');
+    
+    // 2回鳴らす
+    const piyo = (startTime) => {
       const osc = audioCtx.createOscillator();
       const gain = audioCtx.createGain();
       
-      // 木琴のようなポコポコした音色にする
-      osc.type = 'triangle'; 
-      osc.frequency.setValueAtTime(freq, now + i * 0.12);
+      osc.type = 'sine';
+      // ひよこの鳴き声（高いところからさらに少し上がる）
+      osc.frequency.setValueAtTime(2000, startTime);
+      osc.frequency.exponentialRampToValueAtTime(2500, startTime + 0.05);
       
-      gain.gain.setValueAtTime(0.3, now + i * 0.12);
-      gain.gain.exponentialRampToValueAtTime(0.01, now + i * 0.12 + 0.3);
+      gain.gain.setValueAtTime(0, startTime);
+      gain.gain.linearRampToValueAtTime(0.2, startTime + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.01, startTime + 0.08);
 
       osc.connect(gain);
       gain.connect(audioCtx.destination);
       
-      osc.start(now + i * 0.12);
-      osc.stop(now + i * 0.12 + 0.4);
-    });
+      osc.start(startTime);
+      osc.stop(startTime + 0.1);
+    };
+
+    if (isLogin) {
+      piyo(now);
+      piyo(now + 0.15); // 登園は元気にタタン！
+    } else {
+      piyo(now);
+      piyo(now + 0.4); // 降園はゆったりピヨ...ピヨ
+    }
   }
 </script>
 </body>

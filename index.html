@@ -41,15 +41,19 @@
       box-shadow: 0 6px 0 #E57381; cursor: pointer; transition: 0.2s;
     }
     #btn:active { transform: translateY(4px); box-shadow: 0 2px 0 #E57381; }
-    #btn:disabled { background: #ccc; box-shadow: 0 4px 0 #999; opacity: 0.6; }
+    #btn:disabled { background: #ccc; opacity: 0.6; }
 
     #scanView { display: none; }
     .video-container {
       position: relative; width: 100%; border-radius: 25px;
       overflow: hidden; border: 8px solid var(--main-pink);
-      background: #eee; margin-bottom: 15px;
+      background: #000; margin-bottom: 15px;
     }
-    #video { width: 100%; display: block; object-fit: cover; }
+    /* インカメラを鏡のように表示させる（左右反転） */
+    #video { 
+      width: 100%; display: block; object-fit: cover;
+      transform: scaleX(-1);
+    }
 
     #msgOverlay { 
       display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
@@ -82,14 +86,14 @@
   <div class="video-container">
     <video id="video" autoplay playsinline muted></video>
   </div>
-  <div style="font-size: 14px; font-weight: bold; color: var(--main-pink);">QRコードをみせてね♪</div>
-  <div id="debug">スキャンたいき中...</div>
+  <div style="font-size: 14px; font-weight: bold; color: var(--main-pink);">QRをみせてね♪</div>
+  <div id="debug">スキャン中...</div>
   <button onclick="location.reload()" style="background:none; border:none; color:#bbb; margin-top:15px; font-size:12px; text-decoration:underline;">やりなおす</button>
 </div>
 
 <div id="msgOverlay">
   <div class="res-card">
-    <div class="res-emoji" id="resEmoji">🌸</div>
+    <div class="res-emoji" id="resEmoji">🐣</div>
     <div class="res-name" id="resName">〇〇 さん</div>
     <div id="resType" class="res-type">登園完了</div>
     <div id="resTime" style="margin-top:15px; font-size:18px; color:#888;">00:00</div>
@@ -105,7 +109,7 @@
     if (typeof jsQR !== 'undefined') {
       clearInterval(checkLib);
       const btn = document.getElementById('btn');
-      btn.disabled = false; btn.innerText = "📷 カメラをはじめる";
+      btn.disabled = false; btn.innerText = "📷 インカメラではじめる";
     }
   }, 500);
 
@@ -115,14 +119,19 @@
     audioCtx = new (window.AudioContext || window.webkitAudioContext)();
     
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+      // facingModeを 'user' (インカメラ) に変更
+      const stream = await navigator.mediaDevices.getUserMedia({ 
+        video: { facingMode: 'user' } 
+      });
       const video = document.getElementById('video');
       video.srcObject = stream;
       video.onloadedmetadata = () => {
         video.play();
         setInterval(analyze, 300);
       };
-    } catch(e) { alert("カメラが使えません"); }
+    } catch(e) { 
+      alert("カメラが見つかりません。設定を確認してください。"); 
+    }
   }
 
   function analyze() {
@@ -181,45 +190,28 @@
     setTimeout(() => {
       overlay.style.display = 'none';
       isProcessing = false;
-      document.getElementById('debug').innerText = "スキャンたいき中...";
+      document.getElementById('debug').innerText = "スキャン中...";
     }, 3500);
   }
 
   function playPiyoSound(type) {
     if (!audioCtx) return;
     if (audioCtx.state === 'suspended') audioCtx.resume();
-    
     const now = audioCtx.currentTime;
-    const isLogin = (type === '登園');
-    
-    // 2回鳴らす
     const piyo = (startTime) => {
       const osc = audioCtx.createOscillator();
       const gain = audioCtx.createGain();
-      
       osc.type = 'sine';
-      // ひよこの鳴き声（高いところからさらに少し上がる）
       osc.frequency.setValueAtTime(2000, startTime);
       osc.frequency.exponentialRampToValueAtTime(2500, startTime + 0.05);
-      
       gain.gain.setValueAtTime(0, startTime);
       gain.gain.linearRampToValueAtTime(0.2, startTime + 0.02);
       gain.gain.exponentialRampToValueAtTime(0.01, startTime + 0.08);
-
-      osc.connect(gain);
-      gain.connect(audioCtx.destination);
-      
-      osc.start(startTime);
-      osc.stop(startTime + 0.1);
+      osc.connect(gain); gain.connect(audioCtx.destination);
+      osc.start(startTime); osc.stop(startTime + 0.1);
     };
-
-    if (isLogin) {
-      piyo(now);
-      piyo(now + 0.15); // 登園は元気にタタン！
-    } else {
-      piyo(now);
-      piyo(now + 0.4); // 降園はゆったりピヨ...ピヨ
-    }
+    if (type === '登園') { piyo(now); piyo(now + 0.15); } 
+    else { piyo(now); piyo(now + 0.4); }
   }
 </script>
 </body>

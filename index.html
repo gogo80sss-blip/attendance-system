@@ -83,4 +83,199 @@
       <div class="scan-line"></div>
     </div>
     <div id="clock"></div>
-    <div id="debug">待機中
+    <div id="debug">待機中... QRをかざしてください</div>
+  </div>
+  <div id="resultView">
+    <div class="emoji"    id="resEmoji"></div>
+    <div class="name"     id="resName"></div>
+    <div class="greeting" id="resGreeting"></div>
+    <div class="badge"    id="resBadge"></div>
+    <div class="time"     id="resTime"></div>
+    <div class="class-name" id="resClass"></div>
+    <div class="timer-bar"><div id="timerFill"></div></div>
+  </div>
+  <div id="errorView">
+    <div class="e-emoji">⚠️</div>
+    <div class="e-msg" id="errMsg"></div>
+  </div>
+</div>
+
+<script>
+  // --- 設定 ---
+  const GAS_URL  = 'https://script.google.com/macros/s/AKfycbzVc8sxELmKBLCu0NRLdukr7B2ydrdlGZbxMY68pKvLWPmpxSSEEh7d_ijRboJi3WBxKw/exec';
+  let audioCtx   = null;
+  let processing = false;
+  let lastId     = '';
+  let lastTime   = 0;
+  let timerID    = null;
+
+  function log(msg) {
+    const el = document.getElementById('debug');
+    if (el) el.textContent = msg;
+    console.log(msg);
+  }
+
+  function updateClock() {
+    const now = new Date();
+    const h = String(now.getHours()).padStart(2,'0');
+    const m = String(now.getMinutes()).padStart(2,'0');
+    document.getElementById('clock').textContent = h + ':' + m;
+  }
+  setInterval(updateClock, 1000);
+
+  async function startSystem() {
+    // 1. AudioContextの初期化（iPhone対策で無音を鳴らす）
+    try {
+      audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      const buffer = audioCtx.createBuffer(1, 1, 22050);
+      const source = audioCtx.createBufferSource();
+      source.buffer = buffer;
+      source.connect(audioCtx.destination);
+      source.start(0);
+      if (audioCtx.state === 'suspended') audioCtx.resume();
+      log('音声を有効化しました');
+    } catch(e) { log('音声エラー: ' + e.message); }
+
+    document.getElementById('startView').style.display  = 'none';
+    document.getElementById('cameraView').style.display = 'block';
+    updateClock();
+
+    // 2. カメラ起動
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: 'environment' }
+      });
+      const video = document.getElementById('video');
+      video.srcObject = stream;
+      await video.play();
+      requestAnimationFrame(scanLoop);
+    } catch(e) {
+      log('カメラエラー: ' + e.message);
+      alert('カメラを起動できませんでした。ブラウザの設定で許可してください。');
+    }
+  }
+
+  function scanLoop() {
+    const video  = document.getElementById('video');
+    const canvas = document.getElementById('canvas');
+
+    if (video.readyState === video.HAVE_ENOUGH_DATA && !processing) {
+      canvas.width  = video.videoWidth;
+      canvas.height = video.videoHeight;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      
+      // iPhoneでも確実に動くjsQRを使用
+      const code = jsQR(imageData.data, imageData.width, imageData.height);
+      
+      if (code) {
+        handleQRCode(code.data);
+      }
+    }
+    requestAnimationFrame(scanLoop);
+  }
+
+  function handleQRCode(url) {
+    const now = Date.now();
+    const match = url.match(/[?&]id=(\d+)/);
+    if (match) {
+      const id = match[1];
+      // 同じ人を連続で読み取らない（3秒間）
+      if (id !== lastId || now - lastTime > 3000) {
+        lastId = id; lastTime = now;
+        processId(id);
+      }
+    }
+  }
+
+  function processId(id) {
+    processing = true;
+    log('データ送信中...');
+    fetch(GAS_URL + '?mode=result&id=' + id)
+      .then(r => r.json())
+      .then(data => {
+        if (data.error) showError(data.error);
+        else showResult(data);
+      })
+      .catch(err => showError('通信エラーが発生しました'));
+  }
+
+  function showResult(d) {
+    const isLogin = d.type === '登園';
+    const accent  = isLogin ? '#FF9800' : '#4CAF50'; // 登園：オレンジ、降園：グリーン
+    const honorific = d.gender === '男' ? 'くん' : 'ちゃん';
+
+    document.getElementById('resEmoji').textContent      = isLogin ? '🌸' : '🏠';
+    document.getElementById('resName').textContent       = d.name + ' ' + honorific;
+    document.getElementById('resGreeting').textContent   = isLogin ? 'おはようございます！' : 'また明日ね！';
+    document.getElementById('resBadge').textContent      = d.type + 'しました ✅';
+    document.getElementById('resBadge').style.background = accent;
+    document.getElementById('resTime').textContent       = d.time;
+    document.getElementById('resTime').style.color       = accent;
+    document.getElementById('resClass').textContent      = d.cls + '（' + d.grade + '）';
+
+    const fill = document.getElementById('timerFill');
+    fill.style.background = accent; fill.style.width = '100%'; fill.style.transition = 'none';
+
+    document.getElementById('cameraView').style.display = 'none';
+    document.getElementById('resultView').style.display = 'block';
+
+    // 魔法の音を鳴らす
+    playMagicSound(d.gender, d.type);
+
+    // 3秒後にカメラに戻る
+    setTimeout(() => { fill.style.transition = 'width 3s linear'; fill.style.width = '0%'; }, 50);
+    if (timerID) clearTimeout(timerID);
+    timerID = setTimeout(showCamera, 3000);
+  }
+
+  function showCamera() {
+    document.getElementById('resultView').style.display = 'none';
+    document.getElementById('errorView').style.display  = 'none';
+    document.getElementById('cameraView').style.display = 'block';
+    processing = false;
+    log('QRを待機しています...');
+  }
+
+  function showError(msg) {
+    document.getElementById('errMsg').textContent        = msg;
+    document.getElementById('cameraView').style.display  = 'none';
+    document.getElementById('errorView').style.display   = 'block';
+    if (timerID) clearTimeout(timerID);
+    timerID = setTimeout(showCamera, 3000);
+  }
+
+  function playMagicSound(gender, type) {
+    if (!audioCtx) return;
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+
+    const now = audioCtx.currentTime;
+    // 登園は高めでキラキラ、降園は少し落ち着いた音
+    let baseFreq = (type === '登園') ? 660 : 440;
+    if (gender === '女') baseFreq *= 1.2; // 女の子は少し高めに
+
+    for (let i = 0; i < 3; i++) {
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      
+      osc.type = 'sine';
+      const startFreq = baseFreq + (i * 220);
+      
+      // 周波数が上がる魔法のエフェクト
+      osc.frequency.setValueAtTime(startFreq, now + (i * 0.1));
+      osc.frequency.exponentialRampToValueAtTime(startFreq * 2, now + (i * 0.1) + 0.4);
+
+      gain.gain.setValueAtTime(0.2, now + (i * 0.1));
+      gain.gain.exponentialRampToValueAtTime(0.001, now + (i * 0.1) + 0.5);
+
+      osc.connect(gain);
+      gain.connect(audioCtx.destination);
+
+      osc.start(now + (i * 0.1));
+      osc.stop(now + (i * 0.1) + 0.5);
+    }
+  }
+</script>
+</body>
+</html>

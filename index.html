@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>カトレヤこども園　登降園管理</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jsQR/1.4.0/jsQR.min.js"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: 'Hiragino Kaku Gothic Pro', 'Meiryo', sans-serif;
+      background: linear-gradient(135deg, #E3F2FD, #E8F5E9);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 16px;
+    }
+    .card {
+      background: white;
+      border-radius: 28px;
+      padding: 36px 28px;
+      text-align: center;
+      box-shadow: 0 12px 40px rgba(0,0,0,0.12);
+      max-width: 400px;
+      width: 100%;
+    }
+
+    /* ===== 開始画面 ===== */
+    #startView .logo     { font-size: 56px; margin-bottom: 12px; }
+    #startView .title    { font-size: 22px; font-weight: bold; color: #333; margin-bottom: 4px; }
+    #startView .subtitle { font-size: 13px; color: #999; margin-bottom: 32px; }
+    #startBtn {
+      background: linear-gradient(135deg, #4472C4, #5B8FE8);
+      color: white; border: none; border-radius: 20px;
+      font-size: 22px; font-weight: bold;
+      padding: 20px; width: 100%; cursor: pointer;
+      box-shadow: 0 4px 16px rgba(68,114,196,0.4);
+    }
+
+    /* ===== カメラ画面 ===== */
+    #cameraView { display: none; }
+    #cameraView .cam-title {
+      font-size: 13px; color: #aaa; margin-bottom: 10px;
+    }
+    #videoWrap {
+      position: relative;
+      width: 100%;
+      border-radius: 16px;
+      overflow: hidden;
+      background: #000;
+      margin-bottom: 12px;
+    }
+    #video { width: 100%; display: block; max-height: 300px; object-fit: cover; }
+    .scan-line {
+      position: absolute;
+      left: 0; right: 0;
+      height: 3px;
+      background: rgba(68,114,196,0.8);
+      box-shadow: 0 0 8px rgba(68,114,196,0.8);
+      animation: scanAnim 2s ease-in-out infinite;
+    }
+    @keyframes scanAnim {
+      0%   { top: 5%; }
+      50%  { top: 90%; }
+      100% { top: 5%; }
+    }
+    #clock {
+      font-size: 44px; font-weight: bold;
+      color: #ccc; margin-top: 8px;
+    }
+    #status {
+      font-size: 13px; color: #bbb; margin-top: 8px; min-height: 20px;
+    }
+
+    /* ===== 確認画面 ===== */
+    #resultView { display: none; }
+    #resultView .emoji    { font-size: 64px; margin-bottom: 10px; }
+    #resultView .name     { font-size: 30px; font-weight: bold; color: #333; margin-bottom: 6px; }
+    #resultView .greeting { font-size: 16px; color: #888; margin-bottom: 16px; }
+    #resultView .badge {
+      display: inline-block;
+      color: white; font-size: 20px; font-weight: bold;
+      padding: 10px 28px; border-radius: 50px; margin-bottom: 12px;
+    }
+    #resultView .time       { font-size: 28px; font-weight: bold; margin-bottom: 4px; }
+    #resultView .class-name { font-size: 13px; color: #bbb; margin-bottom: 16px; }
+    .timer-bar  { height: 5px; background: #eee; border-radius: 3px; overflow: hidden; }
+    #timerFill  { height: 100%; border-radius: 3px; transition: none; }
+
+    /* ===== エラー画面 ===== */
+    #errorView { display: none; }
+    #errorView .e-emoji { font-size: 48px; margin-bottom: 10px; }
+    #errorView .e-msg   { font-size: 14px; color: #666; margin-bottom: 16px; line-height: 1.6; }
+  </style>
+</head>
+<body>
+<div class="card">
+
+  <!-- 開始画面 -->
+  <div id="startView">
+    <div class="logo">🌸</div>
+    <div class="title">カトレヤこども園</div>
+    <div class="subtitle">登降園管理システム</div>
+    <button id="startBtn" onclick="startSystem()">📷 開始</button>
+  </div>
+
+  <!-- カメラ画面 -->
+  <div id="cameraView">
+    <div class="cam-title">📷 QRコードをかざしてください</div>
+    <div id="videoWrap">
+      <video id="video" autoplay playsinline muted></video>
+      <canvas id="canvas" style="display:none"></canvas>
+      <div class="scan-line"></div>
+    </div>
+    <div id="clock"></div>
+    <div id="status"></div>
+  </div>
+
+  <!-- 確認画面 -->
+  <div id="resultView">
+    <div class="emoji"  id="resEmoji"></div>
+    <div class="name"   id="resName"></div>
+    <div class="greeting" id="resGreeting"></div>
+    <div class="badge"  id="resBadge"></div>
+    <div class="time"   id="resTime"></div>
+    <div class="class-name" id="resClass"></div>
+    <div class="timer-bar"><div id="timerFill"></div></div>
+  </div>
+
+  <!-- エラー画面 -->
+  <div id="errorView">
+    <div class="e-emoji">⚠️</div>
+    <div class="e-msg" id="errMsg"></div>
+  </div>
+
+</div>
+
+<script>
+  // ============================================================
+  // 設定
+  // ============================================================
+  const GAS_URL = 'https://script.google.com/macros/s/AKfycbzVc8sxELmKBLCu0NRLdukr7B2ydrdlGZbxMY68pKvLWPmpxSSEEh7d_ijRboJi3WBxKw/exec';
+
+  let audioCtx    = null;
+  let scanning    = false;
+  let processing  = false;
+  let lastId      = '';
+  let lastTime    = 0;
+  let timerID     = null;
+
+  // ============================================================
+  // 時計
+  // ============================================================
+  function updateClock() {
+    const now = new Date();
+    const h = String(now.getHours()).padStart(2,'0');
+    const m = String(now.getMinutes()).padStart(2,'0');
+    const el = document.getElementById('clock');
+    if (el) el.textContent = h + ':' + m;
+  }
+  setInterval(updateClock, 1000);
+
+  // ============================================================
+  // 開始ボタン
+  // ============================================================
+  async function startSystem() {
+    // 音の許可を取得
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    const o = audioCtx.createOscillator();
+    const g = audioCtx.createGain();
+    o.connect(g); g.connect(audioCtx.destination);
+    g.gain.setValueAtTime(0.001, audioCtx.currentTime);
+    o.start(); o.stop(audioCtx.currentTime + 0.01);
+
+    // 開始画面を非表示
+    document.getElementById('startView').style.display = 'none';
+    document.getElementById('cameraView').style.display = 'block';
+    updateClock();
+
+    // カメラ起動
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } }
+      });
+      const video = document.getElementById('video');
+      video.srcObject = stream;
+      await video.play();
+      scanning = true;
+      requestAnimationFrame(scanLoop);
+    } catch(e) {
+      alert('カメラの起動に失敗しました\n' + e.message);
+    }
+  }
+
+  // ============================================================
+  // QRスキャンループ
+  // ============================================================
+  function scanLoop() {
+    if (!scanning) return;
+
+    const video  = document.getElementById('video');
+    const canvas = document.getElementById('canvas');
+
+    if (video.readyState === video.HAVE_ENOUGH_DATA) {
+      canvas.width  = video.videoWidth;
+      canvas.height = video.videoHeight;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      const code = jsQR(imageData.data, imageData.width, imageData.height);
+
+      if (code && !processing) {
+        const url  = code.data;
+        const now  = Date.now();
+        const match = url.match(/[?&]id=(\d+)/);
+
+        if (match) {
+          const id = match[1];
+          // 同じQRの連続読み取りを3秒間防ぐ
+          if (id !== lastId || now - lastTime > 3000) {
+            lastId   = id;
+            lastTime = now;
+            processId(id);
+          }
+        }
+      }
+    }
+    requestAnimationFrame(scanLoop);
+  }
+
+  // ============================================================
+  // IDをGASに送って処理
+  // ============================================================
+  function processId(id) {
+    processing = true;
+    document.getElementById('status').textContent = '読み取り中...';
+
+    fetch(GAS_URL + '?mode=result&id=' + id)
+      .then(r => r.json())
+      .then(data => {
+        if (data.error) {
+          showError(data.error);
+        } else {
+          showResult(data);
+        }
+      })
+      .catch(() => showError('通信エラーが発生しました'));
+  }
+
+  // ============================================================
+  // 確認画面を表示
+  // ============================================================
+  function showResult(d) {
+    const isLogin   = d.type === '登園';
+    const accent    = isLogin ? '#FF9800' : '#4CAF50';
+    const emoji     = isLogin ? '🌸' : '🏠';
+    const honorific = d.gender === '男' ? 'くん' : 'ちゃん';
+    const greeting  = isLogin ? 'おはようございます！' : 'また明日ね！';
+
+    document.getElementById('resEmoji').textContent      = emoji;
+    document.getElementById('resName').textContent       = d.name + ' ' + honorific;
+    document.getElementById('resGreeting').textContent   = greeting;
+    document.getElementById('resBadge').textContent      = d.type + 'しました ✅';
+    document.getElementById('resBadge').style.background = accent;
+    document.getElementById('resTime').textContent       = d.time;
+    document.getElementById('resTime').style.color       = accent;
+    document.getElementById('resClass').textContent      = d.cls + '（' + d.grade + '）';
+
+    // タイマーバー
+    const fill = document.getElementById('timerFill');
+    fill.style.background  = accent;
+    fill.style.width       = '100%';
+    fill.style.transition  = 'none';
+
+    // 画面切り替え
+    document.getElementById('cameraView').style.display = 'none';
+    document.getElementById('errorView').style.display  = 'none';
+    document.getElementById('resultView').style.display = 'block';
+
+    // タイマーバーアニメーション
+    setTimeout(() => {
+      fill.style.transition = 'width 3s linear';
+      fill.style.width      = '0%';
+    }, 50);
+
+    // 音を鳴らす
+    playSound(d.gender, d.type);
+
+    // 3秒後にカメラ画面に戻る
+    if (timerID) clearTimeout(timerID);
+    timerID = setTimeout(showCamera, 3000);
+  }
+
+  // ============================================================
+  // カメラ画面に戻る
+  // ============================================================
+  function showCamera() {
+    document.getElementById('resultView').style.display = 'none';
+    document.getElementById('errorView').style.display  = 'none';
+    document.getElementById('cameraView').style.display = 'block';
+    document.getElementById('status').textContent = '';
+    processing = false;
+    updateClock();
+  }
+
+  // ============================================================
+  // エラー画面
+  // ============================================================
+  function showError(msg) {
+    document.getElementById('errMsg').textContent        = msg;
+    document.getElementById('cameraView').style.display  = 'none';
+    document.getElementById('resultView').style.display  = 'none';
+    document.getElementById('errorView').style.display   = 'block';
+    if (timerID) clearTimeout(timerID);
+    timerID = setTimeout(showCamera, 3000);
+  }
+
+  // ============================================================
+  // 音を鳴らす（性別×登降園で4パターン）
+  // ============================================================
+  function playSound(gender, type) {
+    if (!audioCtx) return;
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+
+    let freq1, freq2;
+    if      (gender === '男' && type === '登園') { freq1 = 440; freq2 = 660; }
+    else if (gender === '女' && type === '登園') { freq1 = 660; freq2 = 880; }
+    else if (gender === '男' && type === '降園') { freq1 = 392; freq2 = 523; }
+    else                                          { freq1 = 523; freq2 = 698; }
+
+    const now = audioCtx.currentTime;
+    const o1  = audioCtx.createOscillator();
+    const o2  = audioCtx.createOscillator();
+    const gn  = audioCtx.createGain();
+    o1.connect(gn); o2.connect(gn); gn.connect(audioCtx.destination);
+    o1.type = o2.type = 'sine';
+    o1.frequency.value = freq1;
+    o2.frequency.value = freq2;
+    gn.gain.setValueAtTime(0.3, now);
+    gn.gain.exponentialRampToValueAtTime(0.001, now + 0.8);
+    o1.start(now); o1.stop(now + 0.4);
+    o2.start(now + 0.25); o2.stop(now + 0.8);
+  }
+</script>
+</body>
+</html>

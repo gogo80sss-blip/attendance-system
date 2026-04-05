@@ -3,84 +3,64 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>カトレヤこども園 接続テスト</title>
+  <title>カトレヤこども園 確定版</title>
   <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
   <style>
     body { font-family: sans-serif; margin: 0; padding: 20px; background: #f0f0f0; text-align: center; }
     #video { width: 100%; max-width: 400px; background: #000; border-radius: 10px; }
-    #debug { background: #222; color: #0f0; padding: 10px; margin-top: 10px; text-align: left; font-size: 11px; min-height: 150px; overflow-y: scroll; white-space: pre-wrap; }
+    #debug { background: #222; color: #0f0; padding: 10px; margin-top: 10px; text-align: left; font-size: 11px; min-height: 100px; white-space: pre-wrap; }
     #btn { padding: 20px; font-size: 20px; width: 100%; background: #4472C4; color: white; border: none; border-radius: 10px; }
+    /* 通知用オーバーレイ */
+    #msgOverlay { 
+      display: none; position: fixed; top: 20%; left: 10%; width: 80%; 
+      background: rgba(0,0,0,0.8); color: white; padding: 20px; 
+      border-radius: 15px; font-size: 24px; font-weight: bold; z-index: 1000; 
+    }
   </style>
 </head>
 <body>
 
 <div id="startView">
   <h2>🌸 カトレヤこども園</h2>
-  <div id="loadingMsg" style="color:red; margin-bottom:10px;">ライブラリ準備中...</div>
-  <button id="btn" onclick="start()" disabled>📷 カメラを開始する</button>
+  <button id="btn" onclick="start()" disabled>準備中...</button>
 </div>
 
 <div id="scanView" style="display:none;">
-  <video id="video" autoplay playsinline muted></button>
+  <video id="video" autoplay playsinline muted></video>
   <canvas id="canvas" style="display:none;"></canvas>
-  <div id="debug">ログ待機中...</div>
-  <button onclick="location.reload()" style="margin-top:10px; padding:10px;">🔄 やり直す</button>
+  <div id="msgOverlay"></div>
+  <div id="debug">スキャン待機中...</div>
 </div>
 
 <script>
   const GAS_URL = 'https://script.google.com/macros/s/AKfycbzVc8sxELmKBLCu0NRLdukr7B2ydrdlGZbxMY68pKvLWPmpxSSEEh7d_ijRboJi3WBxKw/exec';
   let audioCtx = null;
   let isProcessing = false;
-  let debugEl = null;
 
-  // ライブラリが読み込まれたかチェックする
-  const checkLibrary = setInterval(() => {
+  // ライブラリ読み込みチェック
+  const checkLib = setInterval(() => {
     if (typeof jsQR !== 'undefined') {
-      clearInterval(checkLibrary);
+      clearInterval(checkLib);
       const btn = document.getElementById('btn');
-      btn.disabled = false;
-      btn.innerText = "📷 カメラを開始する";
-      document.getElementById('loadingMsg').style.display = "none";
+      btn.disabled = false; btn.innerText = "📷 スキャン開始";
     }
   }, 500);
 
-  function writeLog(msg) {
-    if (!debugEl) debugEl = document.getElementById('debug');
-    debugEl.innerText = msg + "\n" + debugEl.innerText;
-  }
-
   async function start() {
-    // 念押しチェック
-    if (typeof jsQR === 'undefined') {
-      alert("ライブラリの読み込みが完了していません。少し待ってから押し直してください。");
-      return;
-    }
-
     document.getElementById('startView').style.display = 'none';
     document.getElementById('scanView').style.display = 'block';
-    writeLog("開始ボタンが押されました");
-
+    
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    
     try {
-      audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-      if (audioCtx.state === 'suspended') await audioCtx.resume();
-      writeLog("音声OK");
-    } catch(e) { writeLog("音声エラー: " + e.message); }
-
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: 'environment' }
-      });
+      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
       const video = document.getElementById('video');
       video.srcObject = stream;
-      
       video.onloadedmetadata = () => {
         video.play();
-        writeLog("ビデオ再生開始。解析ループを起動します...");
-        setInterval(analyze, 250); // 負荷を抑えるため0.25秒間隔
+        setInterval(analyze, 300); // 0.3秒間隔で解析
       };
-    } catch(e) {
-      writeLog("カメラエラー: " + e.message);
-    }
+    } catch(e) { alert("カメラ起動失敗"); }
   }
 
   function analyze() {
@@ -89,58 +69,56 @@
     const canvas = document.getElementById('canvas');
     if (video.readyState !== video.HAVE_ENOUGH_DATA) return;
 
-    try {
-      const ctx = canvas.getContext('2d', { willReadFrequently: true });
-      canvas.width = video.videoWidth;
-      canvas.height = video.videoHeight;
-      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-      
-      const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-      
-      // ここでjsQRを呼び出す
-      const code = jsQR(imageData.data, imageData.width, imageData.height);
+    const ctx = canvas.getContext('2d', {willReadFrequently: true});
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+    const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    const code = jsQR(imgData.data, imgData.width, imgData.height);
 
-      if (code) {
-        writeLog("★QR検出: " + code.data);
-        const match = code.data.match(/[?&]id=([^&]+)/);
-        const id = match ? match[1] : code.data;
-        sendData(id);
-      }
-    } catch(e) {
-      writeLog("解析エラー: " + e.message);
+    if (code) {
+      const id = code.data.match(/[?&]id=([^&]+)/)?.[1] || code.data;
+      sendData(id);
     }
   }
 
   async function sendData(id) {
     isProcessing = true;
-    writeLog("ID: " + id + " を送信します...");
-    
+    showStatus("送信中...");
+
     try {
       const res = await fetch(GAS_URL + "?mode=result&id=" + id);
       const data = await res.json();
       
       if (data.error) {
-        alert("エラー: " + data.error);
-        isProcessing = false;
+        showStatus("エラー: " + data.error, 3000);
       } else {
-        writeLog("送信成功: " + data.name);
-        alert(data.name + " さん、" + data.type + "完了しました！");
+        showStatus(data.name + " さん\n" + data.type + "完了！", 3000);
         playBell();
-        setTimeout(() => { isProcessing = false; }, 3000);
       }
     } catch(e) {
-      writeLog("送信エラー: " + e.message);
-      alert("通信に失敗しました。");
-      isProcessing = false;
+      showStatus("通信エラー", 3000);
     }
+    
+    // 3秒後にスキャンを強制再開（ここが重要）
+    setTimeout(() => {
+      isProcessing = false;
+      document.getElementById('msgOverlay').style.display = 'none';
+    }, 3000);
+  }
+
+  function showStatus(txt, duration = 0) {
+    const overlay = document.getElementById('msgOverlay');
+    overlay.innerText = txt;
+    overlay.style.display = 'block';
   }
 
   function playBell() {
     if (!audioCtx) return;
+    if (audioCtx.state === 'suspended') audioCtx.resume();
     const osc = audioCtx.createOscillator();
     const gain = audioCtx.createGain();
-    osc.connect(gain);
-    gain.connect(audioCtx.destination);
+    osc.connect(gain); gain.connect(audioCtx.destination);
     osc.frequency.setValueAtTime(880, audioCtx.currentTime);
     osc.frequency.exponentialRampToValueAtTime(440, audioCtx.currentTime + 0.5);
     gain.gain.linearRampToValueAtTime(0, audioCtx.currentTime + 0.5);

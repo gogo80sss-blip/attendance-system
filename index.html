@@ -155,38 +155,65 @@
     }
   }
 
-  function scanLoop() {
+  // BarcodeDetector対応チェック
+  const hasBarcodeDetector = 'BarcodeDetector' in window;
+
+  async function scanLoop() {
     const video  = document.getElementById('video');
     const canvas = document.getElementById('canvas');
     frameCount++;
+
     if (frameCount % 60 === 0) {
-      log('スキャン中... フレーム:' + frameCount);
+      log('スキャン中... フレーム:' + frameCount + (hasBarcodeDetector ? ' [BD]' : ' [jsQR]'));
     }
+
     if (video.readyState === video.HAVE_ENOUGH_DATA && !processing) {
-      canvas.width  = video.videoWidth;
-      canvas.height = video.videoHeight;
-      const ctx = canvas.getContext('2d');
-      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-      const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-      const code = jsQR(imageData.data, imageData.width, imageData.height);
-      if (code) {
-        const url = code.data;
-        log('QR検出！: ' + url);
-        const now   = Date.now();
-        const match = url.match(/[?&]id=(\d+)/);
-        if (match) {
-          const id = match[1];
-          if (id !== lastId || now - lastTime > 3000) {
-            lastId = id; lastTime = now;
-            log('ID=' + id + ' GASに送信中...');
-            processId(id);
+
+      if (hasBarcodeDetector) {
+        // BarcodeDetector方式（Android Chrome推奨）
+        try {
+          const detector = new BarcodeDetector({ formats: ['qr_code'] });
+          const codes = await detector.detect(video);
+          if (codes.length > 0) {
+            const url = codes[0].rawValue;
+            log('QR検出(BD)！: ' + url);
+            handleQRCode(url);
           }
-        } else {
-          log('IDなし: ' + url);
+        } catch(e) {
+          log('BDエラー: ' + e.message);
+        }
+      } else {
+        // jsQR方式（フォールバック）
+        canvas.width  = video.videoWidth;
+        canvas.height = video.videoHeight;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        const code = jsQR(imageData.data, imageData.width, imageData.height);
+        if (code) {
+          log('QR検出(jsQR)！: ' + code.data);
+          handleQRCode(code.data);
         }
       }
     }
     requestAnimationFrame(scanLoop);
+  }
+
+  function handleQRCode(url) {
+    const now   = Date.now();
+    const match = url.match(/[?&]id=(\d+)/);
+    if (match) {
+      const id = match[1];
+      if (id !== lastId || now - lastTime > 3000) {
+        lastId = id; lastTime = now;
+        log('ID=' + id + ' GASに送信中...');
+        processId(id);
+      } else {
+        log('同じQR待機中: ' + id);
+      }
+    } else {
+      log('IDなし: ' + url);
+    }
   }
 
   function processId(id) {

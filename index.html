@@ -6,97 +6,41 @@
   <title>カトレヤこども園 登降園管理</title>
   <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
   <style>
-    :root {
-      --main-pink: #FFB7C5;
-      --main-blue: #A1C4FD;
-      --accent-orange: #FF9E2C;
-      --accent-green: #7BC67B;
-      --text-color: #5A4A42;
-    }
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    body {
-      font-family: 'Hiragino Maru Gothic ProN', 'Meiryo', sans-serif;
-      background: linear-gradient(135deg, #FFF5F7 0%, #F0F7FF 100%);
-      min-height: 100vh;
-      display: flex; align-items: center; justify-content: center;
-      color: var(--text-color);
-    }
-    .container {
-      width: 90%; max-width: 400px;
-      background: white; border-radius: 40px;
-      padding: 30px 20px; text-align: center;
-      box-shadow: 0 15px 35px rgba(255, 183, 197, 0.3);
-      border: 6px solid white;
-    }
-    .logo-img { font-size: 60px; display: inline-block; animation: fuwafuwa 3s ease-in-out infinite; }
-    @keyframes fuwafuwa {
-      0%, 100% { transform: translateY(0) rotate(0deg); }
-      50% { transform: translateY(-10px) rotate(5deg); }
-    }
-    h1 { font-size: 22px; margin: 10px 0 5px; color: #D87093; }
-    #btn {
-      background: linear-gradient(to bottom, #FFB7C5, #FF8E9D);
-      color: white; border: none; border-radius: 30px;
-      padding: 18px; width: 100%; font-size: 20px; font-weight: bold;
-      box-shadow: 0 6px 0 #E57381; cursor: pointer; transition: 0.2s;
-    }
-    #btn:active { transform: translateY(4px); box-shadow: 0 2px 0 #E57381; }
-    #btn:disabled { background: #ccc; opacity: 0.6; }
+    :root { --main-pink: #FFB7C5; --text-color: #5A4A42; }
+    body { font-family: sans-serif; background: #FFF5F7; display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0; }
+    .container { width: 90%; max-width: 400px; background: white; border-radius: 40px; padding: 30px 20px; text-align: center; box-shadow: 0 10px 30px rgba(0,0,0,0.05); }
+    
+    /* 【解決策】表示だけ左右反転（ミラー）させる */
+    .video-wrap { position: relative; width: 100%; border-radius: 25px; overflow: hidden; border: 8px solid var(--main-pink); background: #000; }
+    #video { width: 100%; display: block; transform: scaleX(-1); } 
 
-    #scanView { display: none; }
-    .video-container {
-      position: relative; width: 100%; border-radius: 25px;
-      overflow: hidden; border: 8px solid var(--main-pink);
-      background: #000; margin-bottom: 15px;
-    }
-    /* インカメラを鏡のように表示させる（左右反転） */
-    #video { 
-      width: 100%; display: block; object-fit: cover;
-      transform: scaleX(-1);
-    }
-
-    #msgOverlay { 
-      display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-      background: rgba(255,255,255,0.95); z-index: 1000;
-      flex-direction: column; align-items: center; justify-content: center;
-    }
-    .res-card {
-      background: white; border-radius: 30px; padding: 30px;
-      box-shadow: 0 10px 30px rgba(0,0,0,0.1); width: 85%;
-    }
-    .res-emoji { font-size: 80px; margin-bottom: 10px; }
-    .res-name { font-size: 28px; font-weight: bold; margin-bottom: 10px; }
-    .res-type {
-      display: inline-block; padding: 10px 30px; border-radius: 50px;
-      color: white; font-size: 20px; font-weight: bold;
-    }
-    #debug { font-size: 11px; color: #aaa; margin-top: 10px; }
+    #btn { background: #FFB7C5; color: white; border: none; border-radius: 30px; padding: 18px; width: 100%; font-size: 18px; font-weight: bold; cursor: pointer; }
+    #msgOverlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(255,255,255,0.95); z-index: 1000; flex-direction: column; align-items: center; justify-content: center; }
+    .res-card { background: white; border-radius: 30px; padding: 30px; box-shadow: 0 10px 30px rgba(0,0,0,0.1); width: 80%; }
   </style>
 </head>
 <body>
 
-<div class="container" id="startView">
-  <div class="logo-img">🐣</div>
-  <h1>カトレヤこども園</h1>
-  <div style="font-size: 13px; color: #999; margin-bottom: 25px;">ピヨピヨ管理システム</div>
+<div id="startView" class="container">
+  <div style="font-size:60px;">🐣</div>
+  <h2>カトレヤこども園</h2>
   <button id="btn" onclick="start()" disabled>読み込み中...</button>
 </div>
 
-<div class="container" id="scanView">
-  <div class="video-container">
+<div id="scanView" class="container" style="display:none;">
+  <div class="video-wrap">
     <video id="video" autoplay playsinline muted></video>
   </div>
-  <div style="font-size: 14px; font-weight: bold; color: var(--main-pink);">QRをみせてね♪</div>
-  <div id="debug">スキャン中...</div>
-  <button onclick="location.reload()" style="background:none; border:none; color:#bbb; margin-top:15px; font-size:12px; text-decoration:underline;">やりなおす</button>
+  <div style="margin-top:10px; font-weight:bold; color:var(--main-pink);">QRをみせてね♪</div>
+  <canvas id="hiddenCanvas" style="display:none;"></canvas>
+  <button onclick="location.reload()" style="margin-top:15px; font-size:12px; color:#ccc; border:none; background:none; text-decoration:underline;">やりなおす</button>
 </div>
 
 <div id="msgOverlay">
   <div class="res-card">
-    <div class="res-emoji" id="resEmoji">🐣</div>
-    <div class="res-name" id="resName">〇〇 さん</div>
-    <div id="resType" class="res-type">登園完了</div>
-    <div id="resTime" style="margin-top:15px; font-size:18px; color:#888;">00:00</div>
+    <div id="resEmoji" style="font-size:80px;">🌸</div>
+    <div id="resName" style="font-size:26px; font-weight:bold;">〇〇 さん</div>
+    <div id="resType" style="color:white; padding:10px 30px; border-radius:50px; margin-top:10px; display:inline-block; font-weight:bold;">登園完了</div>
   </div>
 </div>
 
@@ -105,11 +49,11 @@
   let audioCtx = null;
   let isProcessing = false;
 
-  const checkLib = setInterval(() => {
+  // ライブラリ確認
+  setInterval(() => {
     if (typeof jsQR !== 'undefined') {
-      clearInterval(checkLib);
-      const btn = document.getElementById('btn');
-      btn.disabled = false; btn.innerText = "📷 インカメラではじめる";
+      const b = document.getElementById('btn');
+      if(b.disabled) { b.disabled = false; b.innerText = "📷 受付をはじめる"; }
     }
   }, 500);
 
@@ -117,33 +61,32 @@
     document.getElementById('startView').style.display = 'none';
     document.getElementById('scanView').style.display = 'block';
     audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-    
     try {
-      // facingModeを 'user' (インカメラ) に変更
-      const stream = await navigator.mediaDevices.getUserMedia({ 
-        video: { facingMode: 'user' } 
-      });
+      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' } });
       const video = document.getElementById('video');
       video.srcObject = stream;
       video.onloadedmetadata = () => {
         video.play();
         setInterval(analyze, 300);
       };
-    } catch(e) { 
-      alert("カメラが見つかりません。設定を確認してください。"); 
-    }
+    } catch(e) { alert("カメラが使えません"); }
   }
 
   function analyze() {
     if (isProcessing) return;
     const video = document.getElementById('video');
-    const canvas = document.createElement('canvas');
+    const canvas = document.getElementById('hiddenCanvas');
     if (video.readyState !== video.HAVE_ENOUGH_DATA) return;
 
+    const ctx = canvas.getContext('2d', {willReadFrequently: true});
     canvas.width = video.videoWidth;
     canvas.height = video.videoHeight;
-    const ctx = canvas.getContext('2d', {willReadFrequently: true});
+    
+    // 【解決策の核心】
+    // 描画時に反転処理を一切入れないことで、
+    // カメラが本来撮影している「正しい向き」の画像として解析に回す
     ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+    
     const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
     const code = jsQR(imgData.data, imgData.width, imgData.height);
 
@@ -155,63 +98,42 @@
 
   async function sendData(id) {
     isProcessing = true;
-    document.getElementById('debug').innerText = "かくにん中...";
-
     try {
       const res = await fetch(GAS_URL + "?mode=result&id=" + id);
       const data = await res.json();
-      
-      if (data.error) {
-        alert(data.error);
-        isProcessing = false;
-      } else {
+      if (!data.error) {
         showResult(data);
-        playPiyoSound(data.type);
-      }
-    } catch(e) {
-      alert("通信エラー");
-      isProcessing = false;
-    }
+        playPiyo(data.type);
+      } else { alert(data.error); isProcessing = false; }
+    } catch(e) { alert("通信エラー"); isProcessing = false; }
   }
 
   function showResult(d) {
     const isLogin = d.type === '登園';
-    const overlay = document.getElementById('msgOverlay');
-    const typeTag = document.getElementById('resType');
-    
     document.getElementById('resEmoji').innerText = isLogin ? '🐣' : '🏠';
     document.getElementById('resName').innerText = d.name + (d.gender === '男' ? ' くん' : ' ちゃん');
-    typeTag.innerText = d.type + "完了！";
-    typeTag.style.background = isLogin ? 'var(--accent-orange)' : 'var(--accent-green)';
-    document.getElementById('resTime').innerText = d.time;
-    
-    overlay.style.display = 'flex';
-
-    setTimeout(() => {
-      overlay.style.display = 'none';
-      isProcessing = false;
-      document.getElementById('debug').innerText = "スキャン中...";
-    }, 3500);
+    const t = document.getElementById('resType');
+    t.innerText = d.type + "完了！";
+    t.style.background = isLogin ? '#FF9E2C' : '#7BC67B';
+    document.getElementById('msgOverlay').style.display = 'flex';
+    setTimeout(() => { document.getElementById('msgOverlay').style.display = 'none'; isProcessing = false; }, 3000);
   }
 
-  function playPiyoSound(type) {
+  function playPiyo(type) {
     if (!audioCtx) return;
     if (audioCtx.state === 'suspended') audioCtx.resume();
-    const now = audioCtx.currentTime;
-    const piyo = (startTime) => {
-      const osc = audioCtx.createOscillator();
-      const gain = audioCtx.createGain();
-      osc.type = 'sine';
-      osc.frequency.setValueAtTime(2000, startTime);
-      osc.frequency.exponentialRampToValueAtTime(2500, startTime + 0.05);
-      gain.gain.setValueAtTime(0, startTime);
-      gain.gain.linearRampToValueAtTime(0.2, startTime + 0.02);
-      gain.gain.exponentialRampToValueAtTime(0.01, startTime + 0.08);
-      osc.connect(gain); gain.connect(audioCtx.destination);
-      osc.start(startTime); osc.stop(startTime + 0.1);
+    const p = (t) => {
+      const o = audioCtx.createOscillator();
+      const g = audioCtx.createGain();
+      o.type = 'sine'; o.frequency.setValueAtTime(2000, t);
+      o.frequency.exponentialRampToValueAtTime(2500, t + 0.05);
+      g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(0.2, t + 0.02);
+      g.gain.exponentialRampToValueAtTime(0.01, t + 0.08);
+      o.connect(g); g.connect(audioCtx.destination);
+      o.start(t); o.stop(t + 0.1);
     };
-    if (type === '登園') { piyo(now); piyo(now + 0.15); } 
-    else { piyo(now); piyo(now + 0.4); }
+    if(type === '登園') { p(audioCtx.currentTime); p(audioCtx.currentTime + 0.15); }
+    else { p(audioCtx.currentTime); p(audioCtx.currentTime + 0.4); }
   }
 </script>
 </body>

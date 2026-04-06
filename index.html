@@ -10,11 +10,10 @@
     body { font-family: sans-serif; background: #FFF5F7; display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0; overflow: hidden; }
     .container { width: 95%; max-width: 400px; background: white; border-radius: 40px; padding: 20px; text-align: center; box-shadow: 0 10px 30px rgba(0,0,0,0.05); }
     
-    /* アウトカメラなので反転(scaleX)は無し */
+    /* アウトカメラなので反転は無し */
     .video-wrap { position: relative; width: 100%; border-radius: 25px; overflow: hidden; border: 6px solid var(--main-pink); background: #000; aspect-ratio: 1/1; }
     #video { width: 100%; height: 100%; object-fit: cover; } 
 
-    /* スキャンエリアのガイド */
     .scan-guide {
       position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
       width: 70%; height: 70%; border: 2px solid rgba(255,255,255,0.5);
@@ -60,7 +59,7 @@
   setInterval(() => {
     if (typeof jsQR !== 'undefined') {
       const b = document.getElementById('btn');
-      if(b.disabled) { b.disabled = false; b.innerText = "📷 受付をはじめる"; }
+      if(b.disabled) { b.disabled = false; b.innerText = "📷 背面カメラで開始"; }
     }
   }, 500);
 
@@ -70,22 +69,28 @@
     audioCtx = new (window.AudioContext || window.webkitAudioContext)();
     
     try {
-      // アウトカメラ(environment)を指定し、フォーカスを優先
-      const constraints = { 
-        video: { 
-          facingMode: 'environment',
-          width: { ideal: 1280 },
-          height: { ideal: 720 }
-        } 
-      };
-      const stream = await navigator.mediaDevices.getUserMedia(constraints);
+      // 強制的に背面カメラを指定。失敗したら通常の背面指定でリトライ
+      let stream;
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({ 
+          video: { facingMode: { exact: "environment" }, width: { ideal: 1280 } } 
+        });
+      } catch (e) {
+        // exactで失敗する場合（PCなど）は通常の指定に落とす
+        stream = await navigator.mediaDevices.getUserMedia({ 
+          video: { facingMode: "environment", width: { ideal: 1280 } } 
+        });
+      }
+      
       const video = document.getElementById('video');
       video.srcObject = stream;
       video.onloadedmetadata = () => {
         video.play();
         setInterval(analyze, 300);
       };
-    } catch(e) { alert("カメラが使えません"); }
+    } catch(e) { 
+      alert("カメラの起動に失敗しました。ブラウザの設定でカメラを許可してください。"); 
+    }
   }
 
   function analyze() {
@@ -116,7 +121,7 @@
       if (!data.error) {
         showResult(data);
         playPiyo(data.type);
-      } else { alert(data.error); isProcessing = false; }
+      } else { alert("エラー: " + data.error); isProcessing = false; }
     } catch(e) { isProcessing = false; }
   }
 

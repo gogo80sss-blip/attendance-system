@@ -8,19 +8,19 @@
   <style>
     :root { --main-pink: #FFB7C5; --text-color: #5A4A42; }
     body { font-family: sans-serif; background: #FFF5F7; display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0; overflow: hidden; }
-    .container { width: 90%; max-width: 400px; background: white; border-radius: 40px; padding: 25px 15px; text-align: center; box-shadow: 0 10px 30px rgba(0,0,0,0.05); }
+    .container { width: 95%; max-width: 400px; background: white; border-radius: 40px; padding: 20px; text-align: center; box-shadow: 0 10px 30px rgba(0,0,0,0.05); }
     
-    .video-wrap { position: relative; width: 100%; border-radius: 25px; overflow: hidden; border: 6px solid var(--main-pink); background: #000; aspect-ratio: 3/4; }
-    #video { width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); } 
+    /* アウトカメラなので反転(scaleX)は無し */
+    .video-wrap { position: relative; width: 100%; border-radius: 25px; overflow: hidden; border: 6px solid var(--main-pink); background: #000; aspect-ratio: 1/1; }
+    #video { width: 100%; height: 100%; object-fit: cover; } 
 
-    /* スキャンガイド枠（ピントを合わせやすくするため離して誘導） */
+    /* スキャンエリアのガイド */
     .scan-guide {
       position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
-      width: 60%; height: 45%; border: 2px dashed rgba(255,255,255,0.7);
-      border-radius: 15px; box-shadow: 0 0 0 2000px rgba(0,0,0,0.3);
-      display: flex; align-items: center; justify-content: center;
+      width: 70%; height: 70%; border: 2px solid rgba(255,255,255,0.5);
+      border-radius: 10px; box-shadow: 0 0 0 2000px rgba(0,0,0,0.4);
     }
-    .scan-guide::after { content: "この枠にQRを合わせてね\n(少し離してね)"; color: white; font-size: 10px; white-space: pre; }
+    .scan-guide::after { content: "枠の中にQRを映してね"; color: white; font-size: 12px; position: absolute; bottom: -25px; width: 100%; left: 0; }
 
     #btn { background: #FFB7C5; color: white; border: none; border-radius: 30px; padding: 18px; width: 100%; font-size: 18px; font-weight: bold; cursor: pointer; box-shadow: 0 4px 0 #E57381; }
     #msgOverlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(255,255,255,0.98); z-index: 1000; flex-direction: column; align-items: center; justify-content: center; }
@@ -30,9 +30,9 @@
 <body>
 
 <div id="startView" class="container">
-  <div style="font-size:60px;">🐣</div>
+  <div style="font-size:60px;">🌸</div>
   <h2 style="color:var(--text-color);">カトレヤこども園</h2>
-  <button id="btn" onclick="start()" disabled>読み込み中...</button>
+  <button id="btn" onclick="start()" disabled>準備中...</button>
 </div>
 
 <div id="scanView" class="container" style="display:none;">
@@ -40,14 +40,14 @@
     <video id="video" autoplay playsinline muted></video>
     <div class="scan-guide"></div>
   </div>
-  <div style="margin-top:12px; font-weight:bold; color:var(--main-pink); font-size:14px;">ピヨピヨ受付中 🐣</div>
+  <div style="margin-top:20px; font-weight:bold; color:var(--main-pink);">ピヨピヨ 受付中 🐣</div>
   <canvas id="hiddenCanvas" style="display:none;"></canvas>
 </div>
 
 <div id="msgOverlay">
   <div class="res-card">
-    <div id="resEmoji" style="font-size:80px;">🌸</div>
-    <div id="resName" style="font-size:26px; font-weight:bold; color:var(--text-color);">〇〇 さん</div>
+    <div id="resEmoji" style="font-size:80px;">🐣</div>
+    <div id="resName" style="font-size:26px; font-weight:bold;">〇〇 さん</div>
     <div id="resType" style="color:white; padding:10px 30px; border-radius:50px; margin-top:15px; display:inline-block; font-weight:bold; font-size:20px;">登園完了</div>
   </div>
 </div>
@@ -70,10 +70,10 @@
     audioCtx = new (window.AudioContext || window.webkitAudioContext)();
     
     try {
-      // 解像度を高めに設定し、インカメラを指定
+      // アウトカメラ(environment)を指定し、フォーカスを優先
       const constraints = { 
         video: { 
-          facingMode: 'user',
+          facingMode: 'environment',
           width: { ideal: 1280 },
           height: { ideal: 720 }
         } 
@@ -81,20 +81,11 @@
       const stream = await navigator.mediaDevices.getUserMedia(constraints);
       const video = document.getElementById('video');
       video.srcObject = stream;
-
-      video.onloadedmetadata = async () => {
+      video.onloadedmetadata = () => {
         video.play();
-        
-        // 【重要】カメラがズームに対応していれば少しズームする
-        const track = stream.getVideoTracks()[0];
-        const capabilities = track.getCapabilities();
-        if (capabilities.zoom) {
-          await track.applyConstraints({ advanced: [{ zoom: capabilities.zoom.min + 1 }] }); 
-        }
-        
         setInterval(analyze, 300);
       };
-    } catch(e) { alert("カメラが使えません。設定を確認してください。"); }
+    } catch(e) { alert("カメラが使えません"); }
   }
 
   function analyze() {
@@ -125,7 +116,7 @@
       if (!data.error) {
         showResult(data);
         playPiyo(data.type);
-      } else { alert("エラー: " + data.error); isProcessing = false; }
+      } else { alert(data.error); isProcessing = false; }
     } catch(e) { isProcessing = false; }
   }
 

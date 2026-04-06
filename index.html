@@ -7,215 +7,327 @@
   <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
   <style>
     :root { --main-pink: #FFB7C5; --text-color: #5A4A42; }
-    body { font-family: sans-serif; background: #FFF5F7; display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0; overflow: hidden; }
-    .container { width: 95%; max-width: 400px; background: white; border-radius: 40px; padding: 20px; text-align: center; box-shadow: 0 10px 30px rgba(0,0,0,0.05); }
-    
-    /* アウトカメラなので反転は無し */
-    .video-wrap { position: relative; width: 100%; border-radius: 25px; overflow: hidden; border: 6px solid var(--main-pink); background: #000; aspect-ratio: 1/1; }
-    #video { width: 100%; height: 100%; object-fit: cover; } 
-
-    .scan-guide {
-      position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
-      width: 70%; height: 70%; border: 2px solid rgba(255,255,255,0.5);
-      border-radius: 10px; box-shadow: 0 0 0 2000px rgba(0,0,0,0.4);
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: sans-serif;
+      background: #FFF5F7;
+      display: flex; align-items: center; justify-content: center;
+      min-height: 100vh; overflow: hidden;
     }
-    .scan-guide::after { content: "枠の中にQRを映してね"; color: white; font-size: 12px; position: absolute; bottom: -25px; width: 100%; left: 0; }
+    .container {
+      width: 95%; max-width: 400px; background: white;
+      border-radius: 40px; padding: 20px; text-align: center;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.08);
+    }
 
-    #btn { background: #FFB7C5; color: white; border: none; border-radius: 30px; padding: 18px; width: 100%; font-size: 18px; font-weight: bold; cursor: pointer; box-shadow: 0 4px 0 #E57381; }
-    #msgOverlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(255,255,255,0.98); z-index: 1000; flex-direction: column; align-items: center; justify-content: center; }
-    .res-card { background: white; border-radius: 30px; padding: 30px; box-shadow: 0 10px 30px rgba(0,0,0,0.1); width: 80%; text-align: center; }
+    /* カメラエリア */
+    .video-wrap {
+      position: relative; width: 100%;
+      border-radius: 20px; overflow: hidden;
+      border: 6px solid var(--main-pink);
+      background: #000; aspect-ratio: 1/1;
+    }
+    /* インカメラなので左右反転して表示 */
+    #video {
+      width: 100%; height: 100%;
+      object-fit: cover;
+      transform: scaleX(-1);
+    }
+
+    /* ガイド枠 */
+    .guide-wrap {
+      position: absolute; top: 0; left: 0;
+      width: 100%; height: 100%;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .guide-box {
+      width: 65%; height: 65%;
+      border: 3px solid rgba(255,255,255,0.9);
+      border-radius: 12px;
+      box-shadow: 0 0 0 2000px rgba(0,0,0,0.35);
+      position: relative;
+    }
+    /* 四隅の強調 */
+    .guide-box::before, .guide-box::after {
+      content: '';
+      position: absolute;
+      width: 20px; height: 20px;
+      border-color: white;
+      border-style: solid;
+    }
+    .guide-box::before {
+      top: -3px; left: -3px;
+      border-width: 4px 0 0 4px;
+      border-radius: 4px 0 0 0;
+    }
+    .guide-box::after {
+      bottom: -3px; right: -3px;
+      border-width: 0 4px 4px 0;
+      border-radius: 0 0 4px 0;
+    }
+    .guide-label {
+      position: absolute;
+      bottom: -36px; left: 50%;
+      transform: translateX(-50%);
+      color: white; font-size: 13px;
+      white-space: nowrap;
+      text-shadow: 0 1px 3px rgba(0,0,0,0.5);
+    }
+
+    /* スキャンライン */
+    .scan-line {
+      position: absolute;
+      left: 10%; right: 10%;
+      height: 2px;
+      background: rgba(255, 183, 197, 0.9);
+      box-shadow: 0 0 6px rgba(255, 183, 197, 0.8);
+      animation: scanMove 2s ease-in-out infinite;
+    }
+    @keyframes scanMove {
+      0%   { top: 15%; }
+      50%  { top: 82%; }
+      100% { top: 15%; }
+    }
+
+    /* ボタン */
+    #btn {
+      background: #FFB7C5; color: white; border: none;
+      border-radius: 30px; padding: 18px; width: 100%;
+      font-size: 18px; font-weight: bold; cursor: pointer;
+      box-shadow: 0 4px 0 #E57381; margin-top: 10px;
+    }
+    #btn:disabled { background: #ddd; box-shadow: none; }
+
+    /* ステータス */
+    #statusMsg {
+      margin-top: 12px; font-size: 13px;
+      color: var(--main-pink); font-weight: bold; min-height: 20px;
+    }
+
+    /* 結果オーバーレイ */
+    #msgOverlay {
+      display: none; position: fixed;
+      top: 0; left: 0; width: 100%; height: 100%;
+      background: rgba(255,255,255,0.97);
+      z-index: 1000;
+      flex-direction: column; align-items: center; justify-content: center;
+    }
+    .res-card {
+      background: white; border-radius: 30px; padding: 32px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+      width: 82%; text-align: center;
+    }
+    #resEmoji { font-size: 80px; margin-bottom: 10px; }
+    #resName  { font-size: 26px; font-weight: bold; margin-bottom: 14px; }
+    #resType  {
+      color: white; padding: 12px 32px; border-radius: 50px;
+      display: inline-block; font-weight: bold; font-size: 20px;
+    }
+    /* タイマーバー */
+    .timer-bar  { height: 4px; background: #eee; border-radius: 2px; overflow: hidden; margin-top: 20px; }
+    #timerFill  { height: 100%; border-radius: 2px; }
   </style>
 </head>
 <body>
 
+<!-- 開始画面 -->
 <div id="startView" class="container">
-  <div style="font-size:60px;">🌸</div>
-  <h2 style="color:var(--text-color);">カトレヤこども園</h2>
+  <div style="font-size:60px; margin-bottom:10px;">🌸</div>
+  <h2 style="color:var(--text-color); margin-bottom:6px;">カトレヤこども園</h2>
+  <div style="font-size:13px; color:#aaa; margin-bottom:24px;">登降園管理システム</div>
   <button id="btn" onclick="start()" disabled>準備中...</button>
 </div>
 
+<!-- カメラ画面 -->
 <div id="scanView" class="container" style="display:none;">
   <div class="video-wrap">
     <video id="video" autoplay playsinline muted></video>
-    <div class="scan-guide"></div>
+    <div class="guide-wrap">
+      <div class="guide-box">
+        <div class="scan-line"></div>
+        <div class="guide-label">📇 QRカードをここに合わせてね</div>
+      </div>
+    </div>
   </div>
-  <div style="margin-top:20px; font-weight:bold; color:var(--main-pink);">ピヨピヨ 受付中 🐣</div>
   <canvas id="hiddenCanvas" style="display:none;"></canvas>
+  <div id="statusMsg">受付中 🐣</div>
 </div>
 
+<!-- 結果オーバーレイ -->
 <div id="msgOverlay">
   <div class="res-card">
-    <div id="resEmoji" style="font-size:80px;">🐣</div>
-    <div id="resName" style="font-size:26px; font-weight:bold;">〇〇 さん</div>
-    <div id="resType" style="color:white; padding:10px 30px; border-radius:50px; margin-top:15px; display:inline-block; font-weight:bold; font-size:20px;">登園完了</div>
+    <div id="resEmoji">🐣</div>
+    <div id="resName">確認中...</div>
+    <div id="resType">読み取りました！</div>
+    <div class="timer-bar"><div id="timerFill"></div></div>
   </div>
 </div>
 
 <script>
-  const GAS_URL = 'https://script.google.com/macros/s/AKfycbzVc8sxELmKBLCu0NRLdukr7B2ydrdlGZbxMY68pKvLWPmpxSSEEh7d_ijRboJi3WBxKw/exec';
-  let audioCtx = null;
+  const GAS_URL   = 'https://script.google.com/macros/s/AKfycbzVc8sxELmKBLCu0NRLdukr7B2ydrdlGZbxMY68pKvLWPmpxSSEEh7d_ijRboJi3WBxKw/exec';
+  let audioCtx    = null;
   let isProcessing = false;
 
+  // jsQRライブラリ確認
   setInterval(() => {
     if (typeof jsQR !== 'undefined') {
       const b = document.getElementById('btn');
-      if(b.disabled) { b.disabled = false; b.innerText = "📷 背面カメラで開始"; }
+      if (b.disabled) { b.disabled = false; b.innerText = "📷 受付をはじめる"; }
     }
-  }, 500);
+  }, 300);
 
+  // 開始ボタン
   async function start() {
-  document.getElementById('startView').style.display = 'none';
-  document.getElementById('scanView').style.display = 'block';
-  audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-  
-  try {
-    let stream;
+    document.getElementById('startView').style.display = 'none';
+    document.getElementById('scanView').style.display  = 'block';
+
+    // 音の許可取得
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    const o = audioCtx.createOscillator();
+    const g = audioCtx.createGain();
+    o.connect(g); g.connect(audioCtx.destination);
+    g.gain.setValueAtTime(0.001, audioCtx.currentTime);
+    o.start(); o.stop(audioCtx.currentTime + 0.01);
+
+    // インカメラ起動
     try {
-      stream = await navigator.mediaDevices.getUserMedia({ 
-        video: { facingMode: { exact: "environment" }, width: { ideal: 1280 } } 
-      });
-    } catch (e) {
-      stream = await navigator.mediaDevices.getUserMedia({ 
-        video: { facingMode: "environment", width: { ideal: 1280 } } 
-      });
-    }
-    const video = document.getElementById('video');
-    video.srcObject = stream;
-    video.onloadedmetadata = () => {
-      video.play();
-      // BarcodeDetector対応なら高速モード
-      if ('BarcodeDetector' in window) {
-        startBarcodeDetector(video);
-      } else {
-        setInterval(analyze, 100); // jsQRは100msに短縮
-      }
-    };
-  } catch(e) { 
-    alert("カメラの起動に失敗しました。");
-  }
-}
-
-// 高速モード（Android Chrome）
-async function startBarcodeDetector(video) {
-  const detector = new BarcodeDetector({ formats: ['qr_code'] });
-  async function detect() {
-    if (!isProcessing && video.readyState === video.HAVE_ENOUGH_DATA) {
-      try {
-        const codes = await detector.detect(video);
-        if (codes.length > 0) {
-          const id = codes[0].rawValue.match(/[?&]id=([^&]+)/)?.[1];
-          if (id) sendData(id);
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: {
+          facingMode: 'user',
+          width:  { ideal: 1280 },
+          height: { ideal: 720 },
         }
-      } catch(e) {}
+      });
+      const video = document.getElementById('video');
+      video.srcObject = stream;
+      video.onloadedmetadata = () => {
+        video.play();
+        // BarcodeDetector対応なら高速モード
+        if ('BarcodeDetector' in window) {
+          document.getElementById('statusMsg').textContent = '受付中 🐣 [高速モード]';
+          startBarcodeDetector(video);
+        } else {
+          document.getElementById('statusMsg').textContent = '受付中 🐣';
+          setInterval(analyze, 100);
+        }
+      };
+    } catch(e) {
+      alert("カメラの起動に失敗しました\n" + e.message);
     }
-    requestAnimationFrame(detect);
   }
-  detect();
-}
 
-// 通常モード（jsQR）
-function analyze() {
-  if (isProcessing) return;
-  const video = document.getElementById('video');
-  const canvas = document.getElementById('hiddenCanvas');
-  if (video.readyState !== video.HAVE_ENOUGH_DATA) return;
-  const ctx = canvas.getContext('2d', {willReadFrequently: true});
-  canvas.width = video.videoWidth;
-  canvas.height = video.videoHeight;
-  ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-  const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-  const code = jsQR(imgData.data, imgData.width, imgData.height);
-  if (code) {
-    const id = code.data.match(/[?&]id=([^&]+)/)?.[1];
-    if (id) sendData(id);
+  // BarcodeDetector方式（高速・Android Chrome）
+  async function startBarcodeDetector(video) {
+    const detector = new BarcodeDetector({ formats: ['qr_code'] });
+    async function detect() {
+      if (!isProcessing && video.readyState === video.HAVE_ENOUGH_DATA) {
+        try {
+          const codes = await detector.detect(video);
+          if (codes.length > 0) {
+            const url = codes[0].rawValue;
+            const id  = url.match(/[?&]id=([^&]+)/)?.[1];
+            if (id) sendData(id);
+          }
+        } catch(e) {}
+      }
+      requestAnimationFrame(detect);
+    }
+    detect();
   }
-}
 
+  // jsQR方式（フォールバック）
   function analyze() {
     if (isProcessing) return;
-    const video = document.getElementById('video');
+    const video  = document.getElementById('video');
     const canvas = document.getElementById('hiddenCanvas');
     if (video.readyState !== video.HAVE_ENOUGH_DATA) return;
 
-    const ctx = canvas.getContext('2d', {willReadFrequently: true});
-    canvas.width = video.videoWidth;
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+    canvas.width  = video.videoWidth;
     canvas.height = video.videoHeight;
-    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-    
-    const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-    const code = jsQR(imgData.data, imgData.width, imgData.height);
 
+    // インカメラの反転を戻してからQR解析
+    ctx.save();
+    ctx.translate(canvas.width, 0);
+    ctx.scale(-1, 1);
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+    ctx.restore();
+
+    const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    const code    = jsQR(imgData.data, imgData.width, imgData.height);
     if (code) {
-      const id = code.data.match(/[?&]id=([^&]+)/)?.[1] || code.data;
-      sendData(id);
+      const id = code.data.match(/[?&]id=([^&]+)/)?.[1];
+      if (id) sendData(id);
     }
   }
 
-  async function sendData(id) {
-  isProcessing = true;
+  // GASに送信（バックグラウンド処理）
+  function sendData(id) {
+    isProcessing = true;
 
-  // ①まず即座に仮の音を鳴らす
-  playPiyo('登園');
-
-  // ②仮の確認画面を即座に表示
-  document.getElementById('resEmoji').innerText = '🐣';
-  document.getElementById('resName').innerText = '確認中...';
-  const t = document.getElementById('resType');
-  t.innerText = '読み取りました！';
-  t.style.background = '#4472C4';
-  document.getElementById('msgOverlay').style.display = 'flex';
-
-  // ③バックグラウンドでGASに記録
-  fetch(GAS_URL + "?mode=result&id=" + id)
-    .then(r => r.json())
-    .then(data => {
-      if (!data.error) {
-        // 正しいデータで画面を更新
-        const isLogin = data.type === '登園';
-        document.getElementById('resEmoji').innerText = isLogin ? '🐣' : '🏠';
-        document.getElementById('resName').innerText = data.name + (data.gender === '男' ? ' くん' : ' ちゃん');
-        t.innerText = data.type + '完了！';
-        t.style.background = isLogin ? '#FF9E2C' : '#7BC67B';
-        // 正しい音を鳴らし直す
-        playPiyo(data.type);
-      }
-    })
-    .catch(e => {})
-    .finally(() => {
-      // 3秒後に画面を閉じる
-      setTimeout(() => {
-        document.getElementById('msgOverlay').style.display = 'none';
-        isProcessing = false;
-      }, 3000);
-    });
-}
-
-  function showResult(d) {
-    const isLogin = d.type === '登園';
-    document.getElementById('resEmoji').innerText = isLogin ? '🐣' : '🏠';
-    document.getElementById('resName').innerText = d.name + (d.gender === '男' ? ' くん' : ' ちゃん');
+    // 即座に仮画面を表示
+    document.getElementById('resEmoji').innerText = '🐣';
+    document.getElementById('resName').innerText  = '確認中...';
     const t = document.getElementById('resType');
-    t.innerText = d.type + "完了！";
-    t.style.background = isLogin ? '#FF9E2C' : '#7BC67B';
+    t.innerText        = '読み取りました！';
+    t.style.background = '#4472C4';
+
+    // タイマーバー
+    const fill = document.getElementById('timerFill');
+    fill.style.background = '#4472C4';
+    fill.style.width      = '100%';
+    fill.style.transition = 'none';
+
     document.getElementById('msgOverlay').style.display = 'flex';
-    setTimeout(() => { document.getElementById('msgOverlay').style.display = 'none'; isProcessing = false; }, 3000);
+    setTimeout(() => {
+      fill.style.transition = 'width 3s linear';
+      fill.style.width      = '0%';
+    }, 50);
+
+    // バックグラウンドでGAS通信
+    fetch(GAS_URL + "?mode=result&id=" + id)
+      .then(r => r.json())
+      .then(data => {
+        if (!data.error) {
+          const isLogin = data.type === '登園';
+          document.getElementById('resEmoji').innerText = isLogin ? '🐣' : '🏠';
+          document.getElementById('resName').innerText  = data.name + (data.gender === '男' ? ' くん' : ' ちゃん');
+          t.innerText        = data.type + '完了！';
+          t.style.background = isLogin ? '#FF9E2C' : '#7BC67B';
+          fill.style.background = isLogin ? '#FF9E2C' : '#7BC67B';
+
+          // 正しいデータで音を鳴らす（1回だけ）
+          playPiyo(data.type);
+        }
+      })
+      .catch(e => {})
+      .finally(() => {
+        setTimeout(() => {
+          document.getElementById('msgOverlay').style.display = 'none';
+          isProcessing = false;
+        }, 3000);
+      });
   }
 
+  // ピヨピヨ音
   function playPiyo(type) {
     if (!audioCtx) return;
     if (audioCtx.state === 'suspended') audioCtx.resume();
     const p = (t) => {
       const o = audioCtx.createOscillator();
       const g = audioCtx.createGain();
-      o.type = 'sine'; o.frequency.setValueAtTime(2000, t);
+      o.type = 'sine';
+      o.frequency.setValueAtTime(2000, t);
       o.frequency.exponentialRampToValueAtTime(2500, t + 0.05);
-      g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(0.2, t + 0.02);
+      g.gain.setValueAtTime(0, t);
+      g.gain.linearRampToValueAtTime(0.2, t + 0.02);
       g.gain.exponentialRampToValueAtTime(0.01, t + 0.08);
       o.connect(g); g.connect(audioCtx.destination);
       o.start(t); o.stop(t + 0.1);
     };
-    if(type === '登園') { p(audioCtx.currentTime); p(audioCtx.currentTime + 0.15); }
-    else { p(audioCtx.currentTime); p(audioCtx.currentTime + 0.4); }
+    const now = audioCtx.currentTime;
+    if (type === '登園') { p(now); p(now + 0.15); }
+    else                  { p(now); p(now + 0.4);  }
   }
 </script>
 </body>

@@ -152,16 +152,43 @@ function analyze() {
   }
 
   async function sendData(id) {
-    isProcessing = true;
-    try {
-      const res = await fetch(GAS_URL + "?mode=result&id=" + id);
-      const data = await res.json();
+  isProcessing = true;
+
+  // ①まず即座に仮の音を鳴らす
+  playPiyo('登園');
+
+  // ②仮の確認画面を即座に表示
+  document.getElementById('resEmoji').innerText = '🐣';
+  document.getElementById('resName').innerText = '確認中...';
+  const t = document.getElementById('resType');
+  t.innerText = '読み取りました！';
+  t.style.background = '#4472C4';
+  document.getElementById('msgOverlay').style.display = 'flex';
+
+  // ③バックグラウンドでGASに記録
+  fetch(GAS_URL + "?mode=result&id=" + id)
+    .then(r => r.json())
+    .then(data => {
       if (!data.error) {
-        showResult(data);
+        // 正しいデータで画面を更新
+        const isLogin = data.type === '登園';
+        document.getElementById('resEmoji').innerText = isLogin ? '🐣' : '🏠';
+        document.getElementById('resName').innerText = data.name + (data.gender === '男' ? ' くん' : ' ちゃん');
+        t.innerText = data.type + '完了！';
+        t.style.background = isLogin ? '#FF9E2C' : '#7BC67B';
+        // 正しい音を鳴らし直す
         playPiyo(data.type);
-      } else { alert("エラー: " + data.error); isProcessing = false; }
-    } catch(e) { isProcessing = false; }
-  }
+      }
+    })
+    .catch(e => {})
+    .finally(() => {
+      // 3秒後に画面を閉じる
+      setTimeout(() => {
+        document.getElementById('msgOverlay').style.display = 'none';
+        isProcessing = false;
+      }, 3000);
+    });
+}
 
   function showResult(d) {
     const isLogin = d.type === '登園';

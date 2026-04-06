@@ -64,34 +64,72 @@
   }, 500);
 
   async function start() {
-    document.getElementById('startView').style.display = 'none';
-    document.getElementById('scanView').style.display = 'block';
-    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-    
+  document.getElementById('startView').style.display = 'none';
+  document.getElementById('scanView').style.display = 'block';
+  audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  
+  try {
+    let stream;
     try {
-      // 強制的に背面カメラを指定。失敗したら通常の背面指定でリトライ
-      let stream;
-      try {
-        stream = await navigator.mediaDevices.getUserMedia({ 
-          video: { facingMode: { exact: "environment" }, width: { ideal: 1280 } } 
-        });
-      } catch (e) {
-        // exactで失敗する場合（PCなど）は通常の指定に落とす
-        stream = await navigator.mediaDevices.getUserMedia({ 
-          video: { facingMode: "environment", width: { ideal: 1280 } } 
-        });
-      }
-      
-      const video = document.getElementById('video');
-      video.srcObject = stream;
-      video.onloadedmetadata = () => {
-        video.play();
-        setInterval(analyze, 300);
-      };
-    } catch(e) { 
-      alert("カメラの起動に失敗しました。ブラウザの設定でカメラを許可してください。"); 
+      stream = await navigator.mediaDevices.getUserMedia({ 
+        video: { facingMode: { exact: "environment" }, width: { ideal: 1280 } } 
+      });
+    } catch (e) {
+      stream = await navigator.mediaDevices.getUserMedia({ 
+        video: { facingMode: "environment", width: { ideal: 1280 } } 
+      });
     }
+    const video = document.getElementById('video');
+    video.srcObject = stream;
+    video.onloadedmetadata = () => {
+      video.play();
+      // BarcodeDetector対応なら高速モード
+      if ('BarcodeDetector' in window) {
+        startBarcodeDetector(video);
+      } else {
+        setInterval(analyze, 100); // jsQRは100msに短縮
+      }
+    };
+  } catch(e) { 
+    alert("カメラの起動に失敗しました。");
   }
+}
+
+// 高速モード（Android Chrome）
+async function startBarcodeDetector(video) {
+  const detector = new BarcodeDetector({ formats: ['qr_code'] });
+  async function detect() {
+    if (!isProcessing && video.readyState === video.HAVE_ENOUGH_DATA) {
+      try {
+        const codes = await detector.detect(video);
+        if (codes.length > 0) {
+          const id = codes[0].rawValue.match(/[?&]id=([^&]+)/)?.[1];
+          if (id) sendData(id);
+        }
+      } catch(e) {}
+    }
+    requestAnimationFrame(detect);
+  }
+  detect();
+}
+
+// 通常モード（jsQR）
+function analyze() {
+  if (isProcessing) return;
+  const video = document.getElementById('video');
+  const canvas = document.getElementById('hiddenCanvas');
+  if (video.readyState !== video.HAVE_ENOUGH_DATA) return;
+  const ctx = canvas.getContext('2d', {willReadFrequently: true});
+  canvas.width = video.videoWidth;
+  canvas.height = video.videoHeight;
+  ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+  const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+  const code = jsQR(imgData.data, imgData.width, imgData.height);
+  if (code) {
+    const id = code.data.match(/[?&]id=([^&]+)/)?.[1];
+    if (id) sendData(id);
+  }
+}
 
   function analyze() {
     if (isProcessing) return;

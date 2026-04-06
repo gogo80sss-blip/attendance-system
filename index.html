@@ -67,11 +67,12 @@
     }
     .guide-label {
       position: absolute;
-      bottom: -36px; left: 50%;
+      bottom: -45px; left: 50%;
       transform: translateX(-50%);
-      color: white; font-size: 13px;
+      color: white; font-size: 12px;
       white-space: nowrap;
-      text-shadow: 0 1px 3px rgba(0,0,0,0.5);
+      text-shadow: 0 1px 3px rgba(0,0,0,0.8);
+      font-weight: bold;
     }
 
     /* スキャンライン */
@@ -130,7 +131,6 @@
 </head>
 <body>
 
-<!-- 開始画面 -->
 <div id="startView" class="container">
   <div style="font-size:60px; margin-bottom:10px;">🌸</div>
   <h2 style="color:var(--text-color); margin-bottom:6px;">カトレヤこども園</h2>
@@ -138,14 +138,13 @@
   <button id="btn" onclick="start()" disabled>準備中...</button>
 </div>
 
-<!-- カメラ画面 -->
 <div id="scanView" class="container" style="display:none;">
   <div class="video-wrap">
     <video id="video" autoplay playsinline muted></video>
     <div class="guide-wrap">
       <div class="guide-box">
         <div class="scan-line"></div>
-        <div class="guide-label">📇 QRカードをここに合わせてね</div>
+        <div class="guide-label">離して枠にQRを合わせてね 🐥</div>
       </div>
     </div>
   </div>
@@ -153,7 +152,6 @@
   <div id="statusMsg">受付中 🐣</div>
 </div>
 
-<!-- 結果オーバーレイ -->
 <div id="msgOverlay">
   <div class="res-card">
     <div id="resEmoji">🐣</div>
@@ -181,154 +179,19 @@
     document.getElementById('startView').style.display = 'none';
     document.getElementById('scanView').style.display  = 'block';
 
-    // 音の許可取得
     audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-    const o = audioCtx.createOscillator();
-    const g = audioCtx.createGain();
-    o.connect(g); g.connect(audioCtx.destination);
-    g.gain.setValueAtTime(0.001, audioCtx.currentTime);
-    o.start(); o.stop(audioCtx.currentTime + 0.01);
 
-    // インカメラ起動
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
         video: {
           facingMode: 'user',
-          width:  { ideal: 1280 },
-          height: { ideal: 720 },
+          width:  { ideal: 1920 }, // インカメラの最高画質を要求
+          height: { ideal: 1080 },
         }
       });
       const video = document.getElementById('video');
       video.srcObject = stream;
-      video.onloadedmetadata = () => {
+      video.onloadedmetadata = async () => {
         video.play();
-        // BarcodeDetector対応なら高速モード
-        if ('BarcodeDetector' in window) {
-          document.getElementById('statusMsg').textContent = '受付中 🐣 [高速モード]';
-          startBarcodeDetector(video);
-        } else {
-          document.getElementById('statusMsg').textContent = '受付中 🐣';
-          setInterval(analyze, 100);
-        }
-      };
-    } catch(e) {
-      alert("カメラの起動に失敗しました\n" + e.message);
-    }
-  }
 
-  // BarcodeDetector方式（高速・Android Chrome）
-  async function startBarcodeDetector(video) {
-    const detector = new BarcodeDetector({ formats: ['qr_code'] });
-    async function detect() {
-      if (!isProcessing && video.readyState === video.HAVE_ENOUGH_DATA) {
-        try {
-          const codes = await detector.detect(video);
-          if (codes.length > 0) {
-            const url = codes[0].rawValue;
-            const id  = url.match(/[?&]id=([^&]+)/)?.[1];
-            if (id) sendData(id);
-          }
-        } catch(e) {}
-      }
-      requestAnimationFrame(detect);
-    }
-    detect();
-  }
-
-  // jsQR方式（フォールバック）
-  function analyze() {
-    if (isProcessing) return;
-    const video  = document.getElementById('video');
-    const canvas = document.getElementById('hiddenCanvas');
-    if (video.readyState !== video.HAVE_ENOUGH_DATA) return;
-
-    const ctx = canvas.getContext('2d', { willReadFrequently: true });
-    canvas.width  = video.videoWidth;
-    canvas.height = video.videoHeight;
-
-    // インカメラの反転を戻してからQR解析
-    ctx.save();
-    ctx.translate(canvas.width, 0);
-    ctx.scale(-1, 1);
-    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-    ctx.restore();
-
-    const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-    const code    = jsQR(imgData.data, imgData.width, imgData.height);
-    if (code) {
-      const id = code.data.match(/[?&]id=([^&]+)/)?.[1];
-      if (id) sendData(id);
-    }
-  }
-
-  // GASに送信（バックグラウンド処理）
-  function sendData(id) {
-    isProcessing = true;
-
-    // 即座に仮画面を表示
-    document.getElementById('resEmoji').innerText = '🐣';
-    document.getElementById('resName').innerText  = '確認中...';
-    const t = document.getElementById('resType');
-    t.innerText        = '読み取りました！';
-    t.style.background = '#4472C4';
-
-    // タイマーバー
-    const fill = document.getElementById('timerFill');
-    fill.style.background = '#4472C4';
-    fill.style.width      = '100%';
-    fill.style.transition = 'none';
-
-    document.getElementById('msgOverlay').style.display = 'flex';
-    setTimeout(() => {
-      fill.style.transition = 'width 3s linear';
-      fill.style.width      = '0%';
-    }, 50);
-
-    // バックグラウンドでGAS通信
-    fetch(GAS_URL + "?mode=result&id=" + id)
-      .then(r => r.json())
-      .then(data => {
-        if (!data.error) {
-          const isLogin = data.type === '登園';
-          document.getElementById('resEmoji').innerText = isLogin ? '🐣' : '🏠';
-          document.getElementById('resName').innerText  = data.name + (data.gender === '男' ? ' くん' : ' ちゃん');
-          t.innerText        = data.type + '完了！';
-          t.style.background = isLogin ? '#FF9E2C' : '#7BC67B';
-          fill.style.background = isLogin ? '#FF9E2C' : '#7BC67B';
-
-          // 正しいデータで音を鳴らす（1回だけ）
-          playPiyo(data.type);
-        }
-      })
-      .catch(e => {})
-      .finally(() => {
-        setTimeout(() => {
-          document.getElementById('msgOverlay').style.display = 'none';
-          isProcessing = false;
-        }, 3000);
-      });
-  }
-
-  // ピヨピヨ音
-  function playPiyo(type) {
-    if (!audioCtx) return;
-    if (audioCtx.state === 'suspended') audioCtx.resume();
-    const p = (t) => {
-      const o = audioCtx.createOscillator();
-      const g = audioCtx.createGain();
-      o.type = 'sine';
-      o.frequency.setValueAtTime(2000, t);
-      o.frequency.exponentialRampToValueAtTime(2500, t + 0.05);
-      g.gain.setValueAtTime(0, t);
-      g.gain.linearRampToValueAtTime(0.2, t + 0.02);
-      g.gain.exponentialRampToValueAtTime(0.01, t + 0.08);
-      o.connect(g); g.connect(audioCtx.destination);
-      o.start(t); o.stop(t + 0.1);
-    };
-    const now = audioCtx.currentTime;
-    if (type === '登園') { p(now); p(now + 0.15); }
-    else                  { p(now); p(now + 0.4);  }
-  }
-</script>
-</body>
-</html>
+        // 【ピント対策】デジタルズームを適用（対応機種のみ

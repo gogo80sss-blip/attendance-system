@@ -166,7 +166,9 @@
 
   // --- ここから追加 ---
 const ANIMAL_SOUNDS = [
-    'sounds/グロッケングリッサンド2.mp3'
+    'sounds/グロッケングリッサンド2.mp3,'
+    'sounds/選択1.mp3,'
+    'sounds/「バイバーイ」.mp3'
   ];
   const soundBuffers = {}; 
   // --- ここまで ---
@@ -289,8 +291,8 @@ const ANIMAL_SOUNDS = [
   function sendData(id) {
     isProcessing = true;
     
-    // 1. 【即時】読み取った瞬間にまず鳴らす！
-    playPiyo('即時');
+// 【1回目：即時】読取専用の音を鳴らす
+    playPiyo('選択1.mp3');
     
     // 即座に仮画面を表示
     document.getElementById('resEmoji').innerText = '🐣';
@@ -321,9 +323,12 @@ const ANIMAL_SOUNDS = [
           t.style.background = isLogin ? '#FF9E2C' : '#7BC67B';
           fill.style.background = isLogin ? '#FF9E2C' : '#7BC67B';
 
-          // 2. 【結果反映】登園なら少し高く、降園なら少し低く、もう一度「ポーン」と鳴らす
-          // これにより「処理が正常に終わった」ことが音で分かります
-          playPiyo(data.type);
+          // 【2回目：確定】登園・降園それぞれの専用音を鳴らす
+          if (data.type === '登園') {
+            playPiyo('sounds/グロッケングリッサンド2.mp3');
+          } else {
+            playPiyo('sounds/「バイバーイ」.mp3');
+          }
         }
       })
       .catch(e => {

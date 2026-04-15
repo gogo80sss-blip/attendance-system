@@ -163,6 +163,23 @@
 
 <script>
   const GAS_URL   = 'https://script.google.com/macros/s/AKfycbzVc8sxELmKBLCu0NRLdukr7B2ydrdlGZbxMY68pKvLWPmpxSSEEh7d_ijRboJi3WBxKw/exec';
+
+  // --- ここから追加 ---
+  const ANIMAL_SOUNDS = [
+    'sounds/トンビの鳴き声.mp3',
+    'sounds/ヒヨコの鳴き声.mp3',
+    'sounds/ニワトリの鳴き声1.mp3',
+    'sounds/オオカミの遠吠え.mp3'
+    'sounds/牛の鳴き声.mp3',
+    'sounds/ヒツジの鳴き声.mp3',
+    'sounds/ヤギの鳴き声.mp3',
+    'sounds/猫の鳴き声1.mp3'
+    'sounds/馬の鳴き声1.mp3',
+    'sounds/ゾウの鳴き声1.mp3',
+  ];
+  const soundBuffers = {}; 
+  // --- ここまで ---
+  
   let audioCtx    = null;
   let isProcessing = false;
 
@@ -180,7 +197,17 @@
     document.getElementById('scanView').style.display  = 'block';
 
     audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-
+    
+    // --- ここから追加：音の事前読み込み ---
+    for (const url of ANIMAL_SOUNDS) {
+      try {
+        const resp = await fetch(url);
+        const arrayBuffer = await resp.arrayBuffer();
+        soundBuffers[url] = await audioCtx.decodeAudioData(arrayBuffer);
+      } catch (e) { console.error("読み込み失敗:", url); }
+    }
+    // --- ここまで ---
+    
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
         video: {
@@ -304,25 +331,24 @@
       });
   }
 
-  // ピヨピヨ音
+  // 効果音
   function playPiyo(type) {
-    if (!audioCtx) return;
+    if (!audioCtx || Object.keys(soundBuffers).length === 0) return;
     if (audioCtx.state === 'suspended') audioCtx.resume();
-    const p = (t) => {
-      const o = audioCtx.createOscillator();
-      const g = audioCtx.createGain();
-      o.type = 'sine';
-      o.frequency.setValueAtTime(2000, t);
-      o.frequency.exponentialRampToValueAtTime(2500, t + 0.05);
-      g.gain.setValueAtTime(0, t);
-      g.gain.linearRampToValueAtTime(0.2, t + 0.02);
-      g.gain.exponentialRampToValueAtTime(0.01, t + 0.08);
-      o.connect(g); g.connect(audioCtx.destination);
-      o.start(t); o.stop(t + 0.1);
-    };
-    const now = audioCtx.currentTime;
-    if (type === '登園') { p(now); p(now + 0.15); }
-    else                  { p(now); p(now + 0.4);  }
+
+    // ランダムに選ぶ
+    const keys = Object.keys(soundBuffers);
+    const selectedKey = keys[Math.floor(Math.random() * keys.length)];
+    const buffer = soundBuffers[selectedKey];
+
+    const source = audioCtx.createBufferSource();
+    source.buffer = buffer;
+
+    // 登園・降園で再生速度（ピッチ）を変えて変化を出す
+    source.playbackRate.value = (type === '登園') ? 1.05 : 0.85;
+
+    source.connect(audioCtx.destination);
+    source.start(0);
   }
 </script>
 </body>

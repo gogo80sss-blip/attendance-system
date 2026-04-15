@@ -190,12 +190,19 @@ const ANIMAL_SOUNDS = [
     audioCtx = new (window.AudioContext || window.webkitAudioContext)();
     
     // --- ここから追加：音の事前読み込み ---
-    for (const url of ANIMAL_SOUNDS) {
+    for (const path of ANIMAL_SOUNDS) {
       try {
-        const resp = await fetch(url);
+        // 現在のURL（HTMLの場所）を基準に音源を探すように設定
+        const soundUrl = new URL(path, window.location.href).href;
+        const resp = await fetch(soundUrl);
+        if (!resp.ok) throw new Error('ファイルが見つかりません');
+        
         const arrayBuffer = await resp.arrayBuffer();
-        soundBuffers[url] = await audioCtx.decodeAudioData(arrayBuffer);
-      } catch (e) { console.error("読み込み失敗:", url); }
+        soundBuffers[path] = await audioCtx.decodeAudioData(arrayBuffer);
+        console.log("読み込み成功:", path);
+      } catch (e) { 
+        console.error("読み込み失敗:", path, e); 
+      }
     }
     // --- ここまで ---
     

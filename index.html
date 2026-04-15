@@ -289,6 +289,7 @@ const ANIMAL_SOUNDS = [
   function sendData(id) {
     isProcessing = true;
     
+    // 1. 【即時】読み取った瞬間にまず鳴らす！
     playPiyo('即時');
     
     // 即座に仮画面を表示
@@ -319,9 +320,17 @@ const ANIMAL_SOUNDS = [
           t.innerText        = data.type + '完了！';
           t.style.background = isLogin ? '#FF9E2C' : '#7BC67B';
           fill.style.background = isLogin ? '#FF9E2C' : '#7BC67B';
+
+          // 2. 【結果反映】登園なら少し高く、降園なら少し低く、もう一度「ポーン」と鳴らす
+          // これにより「処理が正常に終わった」ことが音で分かります
+          playPiyo(data.type);
         }
       })
-      .catch(e => {})
+      .catch(e => {
+          console.error("通信エラー:", e);
+          t.innerText = "通信エラー 😢";
+          t.style.background = "#FF0000";
+      })
       .finally(() => {
         setTimeout(() => {
           document.getElementById('msgOverlay').style.display = 'none';

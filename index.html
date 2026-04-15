@@ -281,10 +281,12 @@
           fill.style.background = isLogin ? '#FF9E2C' : '#7BC67B';
 
           // 【2回目：確定】結果に合わせて専用音を鳴らす
-          if (isLogin) {
-            playPiyo('sounds/グロッケングリッサンド2.mp3');
-          } else {
+          if (typeLabel === '降園') {
+            // 降園の時だけ「バイバーイ」
             playPiyo('sounds/「バイバーイ」.mp3');
+          } else {
+            // それ以外（登園、または想定外の文字）はすべて「グロッケン」
+            playPiyo('sounds/グロッケングリッサンド2.mp3');
           }
         }
       })

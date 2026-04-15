@@ -288,7 +288,9 @@ const ANIMAL_SOUNDS = [
   // GASに送信
   function sendData(id) {
     isProcessing = true;
-
+    
+    playPiyo('即時');
+    
     // 即座に仮画面を表示
     document.getElementById('resEmoji').innerText = '🐣';
     document.getElementById('resName').innerText  = '確認中...';
@@ -317,7 +319,6 @@ const ANIMAL_SOUNDS = [
           t.innerText        = data.type + '完了！';
           t.style.background = isLogin ? '#FF9E2C' : '#7BC67B';
           fill.style.background = isLogin ? '#FF9E2C' : '#7BC67B';
-          playPiyo(data.type);
         }
       })
       .catch(e => {})
@@ -334,7 +335,6 @@ const ANIMAL_SOUNDS = [
     if (!audioCtx || Object.keys(soundBuffers).length === 0) return;
     if (audioCtx.state === 'suspended') audioCtx.resume();
 
-    // ランダムに選ぶ
     const keys = Object.keys(soundBuffers);
     const selectedKey = keys[Math.floor(Math.random() * keys.length)];
     const buffer = soundBuffers[selectedKey];
@@ -342,8 +342,10 @@ const ANIMAL_SOUNDS = [
     const source = audioCtx.createBufferSource();
     source.buffer = buffer;
 
-    // 登園・降園で再生速度（ピッチ）を変えて変化を出す
-    source.playbackRate.value = (type === '登園') ? 1.05 : 0.85;
+    // typeに応じてピッチを変える（即時の場合は標準速度1.0）
+    if (type === '登園') source.playbackRate.value = 1.05;
+    else if (type === '降園') source.playbackRate.value = 0.85;
+    else source.playbackRate.value = 1.0;
 
     source.connect(audioCtx.destination);
     source.start(0);

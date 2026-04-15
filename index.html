@@ -19,22 +19,17 @@
       border-radius: 40px; padding: 20px; text-align: center;
       box-shadow: 0 10px 30px rgba(0,0,0,0.08);
     }
-
-    /* カメラエリア */
     .video-wrap {
       position: relative; width: 100%;
       border-radius: 20px; overflow: hidden;
       border: 6px solid var(--main-pink);
       background: #000; aspect-ratio: 1/1;
     }
-    /* インカメラなので左右反転して表示 */
     #video {
       width: 100%; height: 100%;
       object-fit: cover;
       transform: scaleX(-1);
     }
-
-    /* ガイド枠 */
     .guide-wrap {
       position: absolute; top: 0; left: 0;
       width: 100%; height: 100%;
@@ -47,7 +42,6 @@
       box-shadow: 0 0 0 2000px rgba(0,0,0,0.35);
       position: relative;
     }
-    /* 四隅の強調 */
     .guide-box::before, .guide-box::after {
       content: '';
       position: absolute;
@@ -74,8 +68,6 @@
       text-shadow: 0 1px 3px rgba(0,0,0,0.8);
       font-weight: bold;
     }
-
-    /* スキャンライン */
     .scan-line {
       position: absolute;
       left: 10%; right: 10%;
@@ -89,8 +81,6 @@
       50%  { top: 82%; }
       100% { top: 15%; }
     }
-
-    /* ボタン */
     #btn {
       background: #FFB7C5; color: white; border: none;
       border-radius: 30px; padding: 18px; width: 100%;
@@ -98,14 +88,10 @@
       box-shadow: 0 4px 0 #E57381; margin-top: 10px;
     }
     #btn:disabled { background: #ddd; box-shadow: none; }
-
-    /* ステータス */
     #statusMsg {
       margin-top: 12px; font-size: 13px;
       color: var(--main-pink); font-weight: bold; min-height: 20px;
     }
-
-    /* 結果オーバーレイ */
     #msgOverlay {
       display: none; position: fixed;
       top: 0; left: 0; width: 100%; height: 100%;
@@ -124,7 +110,6 @@
       color: white; padding: 12px 32px; border-radius: 50px;
       display: inline-block; font-weight: bold; font-size: 20px;
     }
-    /* タイマーバー */
     .timer-bar  { height: 4px; background: #eee; border-radius: 2px; overflow: hidden; margin-top: 20px; }
     #timerFill  { height: 100%; border-radius: 2px; }
   </style>
@@ -162,21 +147,19 @@
 </div>
 
 <script>
-  const GAS_URL   = 'https://script.google.com/macros/s/AKfycbzVc8sxELmKBLCu0NRLdukr7B2ydrdlGZbxMY68pKvLWPmpxSSEEh7d_ijRboJi3WBxKw/exec';
+  const GAS_URL = 'https://script.google.com/macros/s/AKfycbzVc8sxELmKBLCu0NRLdukr7B2ydrdlGZbxMY68pKvLWPmpxSSEEh7d_ijRboJi3WBxKw/exec';
 
-  // --- ここから追加 ---
-const ANIMAL_SOUNDS = [
-    'sounds/グロッケングリッサンド2.mp3,'
-    'sounds/選択1.mp3,'
+  // --- 音源リスト（パスを正確に修正しました） ---
+  const ANIMAL_SOUNDS = [
+    'sounds/グロッケングリッサンド2.mp3',
+    'sounds/選択1.mp3',
     'sounds/「バイバーイ」.mp3'
   ];
   const soundBuffers = {}; 
-  // --- ここまで ---
   
   let audioCtx    = null;
   let isProcessing = false;
 
-  // jsQRライブラリ確認
   setInterval(() => {
     if (typeof jsQR !== 'undefined') {
       const b = document.getElementById('btn');
@@ -184,21 +167,16 @@ const ANIMAL_SOUNDS = [
     }
   }, 300);
 
-  // 開始ボタン
   async function start() {
     document.getElementById('startView').style.display = 'none';
     document.getElementById('scanView').style.display  = 'block';
-
     audioCtx = new (window.AudioContext || window.webkitAudioContext)();
     
-    // --- ここから追加：音の事前読み込み ---
     for (const path of ANIMAL_SOUNDS) {
       try {
-        // 現在のURL（HTMLの場所）を基準に音源を探すように設定
         const soundUrl = new URL(path, window.location.href).href;
         const resp = await fetch(soundUrl);
         if (!resp.ok) throw new Error('ファイルが見つかりません');
-        
         const arrayBuffer = await resp.arrayBuffer();
         soundBuffers[path] = await audioCtx.decodeAudioData(arrayBuffer);
         console.log("読み込み成功:", path);
@@ -206,30 +184,21 @@ const ANIMAL_SOUNDS = [
         console.error("読み込み失敗:", path, e); 
       }
     }
-    // --- ここまで ---
     
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
-        video: {
-          facingMode: 'user',
-          width:  { ideal: 1920 }, // インカメラの最高画質を要求
-          height: { ideal: 1080 },
-        }
+        video: { facingMode: 'user', width: { ideal: 1920 }, height: { ideal: 1080 } }
       });
       const video = document.getElementById('video');
       video.srcObject = stream;
       video.onloadedmetadata = async () => {
         video.play();
-
-        // 【ピント対策】デジタルズームを適用（対応機種のみ）
         const track = stream.getVideoTracks()[0];
         const caps = track.getCapabilities();
         if (caps.zoom) {
-          // ズーム値を少し上げて、遠くのQRを大きく捉える
           const zoomVal = Math.min(caps.zoom.max, caps.zoom.min + 0.8);
           await track.applyConstraints({ advanced: [{ zoom: zoomVal }] });
         }
-
         if ('BarcodeDetector' in window) {
           document.getElementById('statusMsg').textContent = '受付中 🐣 [高速モード]';
           startBarcodeDetector(video);
@@ -239,11 +208,10 @@ const ANIMAL_SOUNDS = [
         }
       };
     } catch(e) {
-      alert("カメラの起動に失敗しました。Safari/Chromeの設定を確認してください。");
+      alert("カメラの起動に失敗しました。");
     }
   }
 
-  // BarcodeDetector方式（高速・Android Chrome）
   async function startBarcodeDetector(video) {
     const detector = new BarcodeDetector({ formats: ['qr_code'] });
     async function detect() {
@@ -262,54 +230,43 @@ const ANIMAL_SOUNDS = [
     detect();
   }
 
-  // jsQR方式（フォールバック）
   function analyze() {
     if (isProcessing) return;
-    const video  = document.getElementById('video');
+    const video = document.getElementById('video');
     const canvas = document.getElementById('hiddenCanvas');
     if (video.readyState !== video.HAVE_ENOUGH_DATA) return;
-
     const ctx = canvas.getContext('2d', { willReadFrequently: true });
-    // 解析負荷を下げるため中解像度で描画
-    canvas.width  = 640;
-    canvas.height = 480;
-
-    // 反転を戻さずにそのまま描画（jsQRは反転していても検知可能）
+    canvas.width = 640; canvas.height = 480;
     ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-
     const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-    const code    = jsQR(imgData.data, imgData.width, imgData.height, {
-        inversionAttempts: "dontInvert",
-    });
+    const code = jsQR(imgData.data, imgData.width, imgData.height, { inversionAttempts: "dontInvert" });
     if (code) {
       const id = code.data.match(/[?&]id=([^&]+)/)?.[1] || code.data;
       if (id) sendData(id);
     }
   }
 
-  // GASに送信
   function sendData(id) {
     isProcessing = true;
     
-// 【1回目：即時】読取専用の音を鳴らす
-    playPiyo('選択1.mp3');
+    // 【1回目：即時】読み取り音（選択1.mp3）を即座に鳴らす
+    playPiyo('sounds/選択1.mp3');
     
-    // 即座に仮画面を表示
     document.getElementById('resEmoji').innerText = '🐣';
     document.getElementById('resName').innerText  = '確認中...';
     const t = document.getElementById('resType');
-    t.innerText        = '読み取りました！';
+    t.innerText = '読み取りました！';
     t.style.background = '#4472C4';
 
     const fill = document.getElementById('timerFill');
     fill.style.background = '#4472C4';
-    fill.style.width      = '100%';
+    fill.style.width = '100%';
     fill.style.transition = 'none';
 
     document.getElementById('msgOverlay').style.display = 'flex';
     setTimeout(() => {
       fill.style.transition = 'width 3s linear';
-      fill.style.width      = '0%';
+      fill.style.width = '0%';
     }, 50);
 
     fetch(GAS_URL + "?mode=result&id=" + id)
@@ -319,23 +276,19 @@ const ANIMAL_SOUNDS = [
           const isLogin = data.type === '登園';
           document.getElementById('resEmoji').innerText = isLogin ? '🐣' : '🏠';
           document.getElementById('resName').innerText  = data.name + (data.gender === '男' ? ' くん' : ' ちゃん');
-          t.innerText        = data.type + '完了！';
+          t.innerText = data.type + '完了！';
           t.style.background = isLogin ? '#FF9E2C' : '#7BC67B';
           fill.style.background = isLogin ? '#FF9E2C' : '#7BC67B';
 
-          // 【2回目：確定】登園・降園それぞれの専用音を鳴らす
-          if (data.type === '登園') {
-            playPiyo('sounds/グロッケングリッサンド2.mp3');
+          // 【2回目：確定】結果に合わせて専用音を鳴らす
+          if (isLogin) {
+            playPiyo('sounds/グロッケングリッサンド2.mp3');
           } else {
             playPiyo('sounds/「バイバーイ」.mp3');
           }
         }
       })
-      .catch(e => {
-          console.error("通信エラー:", e);
-          t.innerText = "通信エラー 😢";
-          t.style.background = "#FF0000";
-      })
+      .catch(e => { console.error(e); t.innerText = "通信エラー 😢"; })
       .finally(() => {
         setTimeout(() => {
           document.getElementById('msgOverlay').style.display = 'none';
@@ -344,23 +297,14 @@ const ANIMAL_SOUNDS = [
       });
   }
 
-  // 効果音
-  function playPiyo(type) {
-    if (!audioCtx || Object.keys(soundBuffers).length === 0) return;
+  // 効果音再生（パスを直接指定して鳴らす汎用的な形に修正）
+  function playPiyo(soundPath) {
+    if (!audioCtx || !soundBuffers[soundPath]) return;
     if (audioCtx.state === 'suspended') audioCtx.resume();
 
-    const keys = Object.keys(soundBuffers);
-    const selectedKey = keys[Math.floor(Math.random() * keys.length)];
-    const buffer = soundBuffers[selectedKey];
-
+    const buffer = soundBuffers[soundPath];
     const source = audioCtx.createBufferSource();
     source.buffer = buffer;
-
-    // typeに応じてピッチを変える（即時の場合は標準速度1.0）
-    if (type === '登園') source.playbackRate.value = 1.05;
-    else if (type === '降園') source.playbackRate.value = 0.85;
-    else source.playbackRate.value = 1.0;
-
     source.connect(audioCtx.destination);
     source.start(0);
   }

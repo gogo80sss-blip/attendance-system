@@ -149,7 +149,6 @@
 <script>
   const GAS_URL = 'https://script.google.com/macros/s/AKfycbzVc8sxELmKBLCu0NRLdukr7B2ydrdlGZbxMY68pKvLWPmpxSSEEh7d_ijRboJi3WBxKw/exec';
 
-  // --- 音源リスト（パスを正確に修正しました） ---
   const ANIMAL_SOUNDS = [
     'sounds/グロッケングリッサンド2.mp3',
     'sounds/選択1.mp3',
@@ -170,13 +169,23 @@
   async function start() {
     document.getElementById('startView').style.display = 'none';
     document.getElementById('scanView').style.display  = 'block';
+    
+    // AudioContextの生成
     audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+
+    // 【重要】iPhone/Androidの音声ロックを解除するための「空再生」
+    const silentBuf = audioCtx.createBuffer(1, 1, 22050);
+    const node = audioCtx.createBufferSource();
+    node.buffer = silentBuf;
+    node.connect(audioCtx.destination);
+    node.start(0);
+    if (audioCtx.state === 'suspended') audioCtx.resume();
     
     for (const path of ANIMAL_SOUNDS) {
       try {
         const soundUrl = new URL(path, window.location.href).href;
         const resp = await fetch(soundUrl);
-        if (!resp.ok) throw new Error('ファイルが見つかりません');
+        if (!resp.ok) throw new Error('404 Not Found');
         const arrayBuffer = await resp.arrayBuffer();
         soundBuffers[path] = await audioCtx.decodeAudioData(arrayBuffer);
         console.log("読み込み成功:", path);
@@ -249,7 +258,7 @@
   function sendData(id) {
     isProcessing = true;
     
-    // 【1回目：即時】読み取り音（選択1.mp3）を即座に鳴らす
+    // 【1回目】即時音
     playPiyo('sounds/選択1.mp3');
     
     document.getElementById('resEmoji').innerText = '🐣';
@@ -273,24 +282,28 @@
       .then(r => r.json())
       .then(data => {
         if (!data.error) {
-          const isLogin = data.type === '登園';
+          const typeLabel = data.type ? data.type.trim() : "";
+          const isLogin = typeLabel === '登園';
+
           document.getElementById('resEmoji').innerText = isLogin ? '🐣' : '🏠';
           document.getElementById('resName').innerText  = data.name + (data.gender === '男' ? ' くん' : ' ちゃん');
-          t.innerText = data.type + '完了！';
+          t.innerText = typeLabel + '完了！';
           t.style.background = isLogin ? '#FF9E2C' : '#7BC67B';
           fill.style.background = isLogin ? '#FF9E2C' : '#7BC67B';
 
-          // 【2回目：確定】結果に合わせて専用音を鳴らす
+          // 【2回目】確定音
           if (typeLabel === '降園') {
-            // 降園の時だけ「バイバーイ」
             playPiyo('sounds/「バイバーイ」.mp3');
           } else {
-            // それ以外（登園、または想定外の文字）はすべて「グロッケン」
+            // 登園、またはその他の判定
             playPiyo('sounds/グロッケングリッサンド2.mp3');
           }
         }
       })
-      .catch(e => { console.error(e); t.innerText = "通信エラー 😢"; })
+      .catch(e => { 
+        console.error("エラー詳細:", e); 
+        t.innerText = "通信エラー 😢"; 
+      })
       .finally(() => {
         setTimeout(() => {
           document.getElementById('msgOverlay').style.display = 'none';
@@ -299,12 +312,26 @@
       });
   }
 
-  // 効果音再生（パスを直接指定して鳴らす汎用的な形に修正）
   function playPiyo(soundPath) {
-    if (!audioCtx || !soundBuffers[soundPath]) return;
-    if (audioCtx.state === 'suspended') audioCtx.resume();
+    if (!audioCtx) return;
+    // 常に最新の状態をチェック
+    if (audioCtx.state === 'suspended') {
+      audioCtx.resume().then(() => playNow(soundPath));
+    } else {
+      playNow(soundPath);
+    }
+  }
 
-    const buffer = soundBuffers[soundPath];
+ function playNow(soundPath) {
+    // 読み込み時と同じ形式でキーを指定する
+    const buffer = soundBuffers[soundPath]; 
+    
+    if (!buffer) {
+        // デバッグ用：どのパスで失敗しているかコンソールに出す
+        console.warn("音源が見つかりません。登録されているキー:", Object.keys(soundBuffers));
+        console.warn("要求されたパス:", soundPath);
+        return;
+    }
     const source = audioCtx.createBufferSource();
     source.buffer = buffer;
     source.connect(audioCtx.destination);

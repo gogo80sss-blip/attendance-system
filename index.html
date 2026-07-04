@@ -154,15 +154,29 @@
     'sounds/選択1.mp3',
     'sounds/「バイバーイ」.mp3'
   ];
-  const soundBuffers = {}; 
-  
+  const soundBuffers = {};
+
+  const RESULT_DISPLAY_MS    = 2000;   // 結果表示の時間（旧: 3000ms）
+  const SAME_ID_COOLDOWN_MS  = 10000;  // 同じQRの連続打刻を防ぐ時間
+  const WARMUP_INTERVAL_MS   = 240000; // GASを温めておく間隔（4分）
+
   let audioCtx    = null;
   let isProcessing = false;
+  const lastScanTimes = {};  // id → 最後に打刻した時刻（二重打刻防止）
 
-  setInterval(() => {
+  // 【高速化】GASは放置すると初回アクセスが遅くなるため、
+  // 定期的に空アクセスしてサーバーを温めておく
+  function warmUpServer() {
+    fetch(GAS_URL + '?mode=warmup').catch(() => {});
+  }
+  warmUpServer();
+  setInterval(warmUpServer, WARMUP_INTERVAL_MS);
+
+  const btnCheckTimer = setInterval(() => {
     if (typeof jsQR !== 'undefined') {
       const b = document.getElementById('btn');
       if (b.disabled) { b.disabled = false; b.innerText = "📷 受付をはじめる"; }
+      clearInterval(btnCheckTimer);
     }
   }, 300);
 
@@ -202,12 +216,18 @@
       video.srcObject = stream;
       video.onloadedmetadata = async () => {
         video.play();
-        const track = stream.getVideoTracks()[0];
-        const caps = track.getCapabilities();
-        if (caps.zoom) {
-          const zoomVal = Math.min(caps.zoom.max, caps.zoom.min + 0.8);
-          await track.applyConstraints({ advanced: [{ zoom: zoomVal }] });
-        }
+        // 【修正】getCapabilities未対応ブラウザ（Firefox等）で例外が出ると
+        // QR検出が一切始まらなくなるため、try/catchで保護する
+        try {
+          const track = stream.getVideoTracks()[0];
+          if (typeof track.getCapabilities === 'function') {
+            const caps = track.getCapabilities();
+            if (caps.zoom) {
+              const zoomVal = Math.min(caps.zoom.max, caps.zoom.min + 0.8);
+              await track.applyConstraints({ advanced: [{ zoom: zoomVal }] });
+            }
+          }
+        } catch (e) { console.warn("ズーム設定はスキップしました:", e); }
         if ('BarcodeDetector' in window) {
           document.getElementById('statusMsg').textContent = '受付中 🐣 [高速モード]';
           startBarcodeDetector(video);
@@ -256,6 +276,13 @@
   }
 
   function sendData(id) {
+    if (isProcessing) return;
+
+    // 【修正】同じQRを短時間に2回読んでも打刻しない（二重打刻防止）
+    const now = Date.now();
+    if (lastScanTimes[id] && (now - lastScanTimes[id]) < SAME_ID_COOLDOWN_MS) return;
+    lastScanTimes[id] = now;
+
     isProcessing = true;
     
     // 【1回目】即時音
@@ -298,17 +325,38 @@
             // 登園、またはその他の判定
             playPiyo('sounds/グロッケングリッサンド2.mp3');
           }
+        } else {
+          // 【修正】エラー時も画面に表示する（以前は無反応のまま消えるだけだった）
+          document.getElementById('resEmoji').innerText = '❓';
+          document.getElementById('resName').innerText  = '登録が見つかりません';
+          t.innerText = 'せんせいに聞いてね';
+          t.style.background = '#E57381';
+          fill.style.background = '#E57381';
+          delete lastScanTimes[id];  // すぐ再挑戦できるようにする
         }
       })
       .catch(e => { 
         console.error("エラー詳細:", e); 
-        t.innerText = "通信エラー 😢"; 
+        document.getElementById('resEmoji').innerText = '😢';
+        document.getElementById('resName').innerText  = '通信エラー';
+        t.innerText = 'もう一度かざしてね';
+        t.style.background = '#E57381';
+        delete lastScanTimes[id];  // すぐ再挑戦できるようにする
       })
       .finally(() => {
+        // タイマーバーを結果表示時間に合わせてリスタート
+        fill.style.transition = 'none';
+        fill.style.width = '100%';
+        setTimeout(() => {
+          fill.style.transition = 'width ' + RESULT_DISPLAY_MS + 'ms linear';
+          fill.style.width = '0%';
+        }, 30);
+        // 【高速化】結果が出たら短時間で次の受付へ（旧: 3000ms → 2000ms）
+        // 同じ子の二重打刻はクールダウンで防いでいるので、次の子はすぐ読める
         setTimeout(() => {
           document.getElementById('msgOverlay').style.display = 'none';
           isProcessing = false;
-        }, 3000);
+        }, RESULT_DISPLAY_MS);
       });
   }
 

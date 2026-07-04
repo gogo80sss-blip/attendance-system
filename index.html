@@ -88,6 +88,13 @@
       box-shadow: 0 4px 0 #E57381; margin-top: 10px;
     }
     #btn:disabled { background: #ddd; box-shadow: none; }
+    #stopBtn {
+      background: white; color: #E57381;
+      border: 2px solid #FFB7C5;
+      border-radius: 30px; padding: 10px; width: 100%;
+      font-size: 14px; font-weight: bold; cursor: pointer;
+      margin-top: 12px;
+    }
     #statusMsg {
       margin-top: 12px; font-size: 13px;
       color: var(--main-pink); font-weight: bold; min-height: 20px;
@@ -135,6 +142,7 @@
   </div>
   <canvas id="hiddenCanvas" style="display:none;"></canvas>
   <div id="statusMsg">受付中 🐣</div>
+  <button id="stopBtn" onclick="stopScan()">✖ 受付をおわる</button>
 </div>
 
 <div id="msgOverlay">
@@ -162,6 +170,9 @@
 
   let audioCtx    = null;
   let isProcessing = false;
+  let scanning     = false;  // 受付中フラグ（終了ボタンでfalseに）
+  let currentStream = null;  // カメラのストリーム（終了時に停止する）
+  let scanTimer     = null;  // jsQR用のsetInterval ID
   const lastScanTimes = {};  // id → 最後に打刻した時刻（二重打刻防止）
 
   // 【高速化】GASは放置すると初回アクセスが遅くなるため、
@@ -183,9 +194,12 @@
   async function start() {
     document.getElementById('startView').style.display = 'none';
     document.getElementById('scanView').style.display  = 'block';
-    
-    // AudioContextの生成
-    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    scanning = true;
+
+    // AudioContextの生成（再開時は使い回す）
+    if (!audioCtx) {
+      audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    }
 
     // 【重要】iPhone/Androidの音声ロックを解除するための「空再生」
     const silentBuf = audioCtx.createBuffer(1, 1, 22050);
@@ -194,24 +208,28 @@
     node.connect(audioCtx.destination);
     node.start(0);
     if (audioCtx.state === 'suspended') audioCtx.resume();
-    
-    for (const path of ANIMAL_SOUNDS) {
-      try {
-        const soundUrl = new URL(path, window.location.href).href;
-        const resp = await fetch(soundUrl);
-        if (!resp.ok) throw new Error('404 Not Found');
-        const arrayBuffer = await resp.arrayBuffer();
-        soundBuffers[path] = await audioCtx.decodeAudioData(arrayBuffer);
-        console.log("読み込み成功:", path);
-      } catch (e) { 
-        console.error("読み込み失敗:", path, e); 
+
+    // 音声の読み込み（初回のみ）
+    if (Object.keys(soundBuffers).length === 0) {
+      for (const path of ANIMAL_SOUNDS) {
+        try {
+          const soundUrl = new URL(path, window.location.href).href;
+          const resp = await fetch(soundUrl);
+          if (!resp.ok) throw new Error('404 Not Found');
+          const arrayBuffer = await resp.arrayBuffer();
+          soundBuffers[path] = await audioCtx.decodeAudioData(arrayBuffer);
+          console.log("読み込み成功:", path);
+        } catch (e) {
+          console.error("読み込み失敗:", path, e);
+        }
       }
     }
-    
+
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
         video: { facingMode: 'user', width: { ideal: 1920 }, height: { ideal: 1080 } }
       });
+      currentStream = stream;  // 終了ボタンで止められるように保持
       const video = document.getElementById('video');
       video.srcObject = stream;
       video.onloadedmetadata = async () => {
@@ -233,7 +251,8 @@
           startBarcodeDetector(video);
         } else {
           document.getElementById('statusMsg').textContent = '受付中 🐣';
-          setInterval(analyze, 150);
+          if (scanTimer) clearInterval(scanTimer);
+          scanTimer = setInterval(analyze, 150);
         }
       };
     } catch(e) {
@@ -244,6 +263,7 @@
   async function startBarcodeDetector(video) {
     const detector = new BarcodeDetector({ formats: ['qr_code'] });
     async function detect() {
+      if (!scanning) return;  // 終了ボタンでループを止める
       if (!isProcessing && video.readyState === video.HAVE_ENOUGH_DATA) {
         try {
           const codes = await detector.detect(video);
@@ -257,6 +277,22 @@
       requestAnimationFrame(detect);
     }
     detect();
+  }
+
+  // 【追加】終了ボタン: カメラとスキャンを止めて最初の画面に戻る
+  function stopScan() {
+    scanning = false;
+    if (scanTimer) { clearInterval(scanTimer); scanTimer = null; }
+    if (currentStream) {
+      currentStream.getTracks().forEach(track => track.stop());
+      currentStream = null;
+    }
+    const video = document.getElementById('video');
+    video.srcObject = null;
+    isProcessing = false;
+    document.getElementById('msgOverlay').style.display = 'none';
+    document.getElementById('scanView').style.display   = 'none';
+    document.getElementById('startView').style.display  = 'block';
   }
 
   function analyze() {

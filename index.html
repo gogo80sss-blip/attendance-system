@@ -95,6 +95,33 @@
       font-size: 14px; font-weight: bold; cursor: pointer;
       margin-top: 12px;
     }
+    #manualLink {
+      background: none; border: none;
+      color: #bbb; font-size: 12px;
+      margin-top: 18px; cursor: pointer;
+      text-decoration: underline;
+    }
+    #manualId {
+      width: 100%; padding: 16px;
+      font-size: 22px; text-align: center;
+      border: 2px solid #FFB7C5; border-radius: 16px;
+      margin: 16px 0 12px; outline: none;
+      color: var(--text-color);
+    }
+    #manualId:focus { border-color: #E57381; }
+    #manualSendBtn {
+      background: #FFB7C5; color: white; border: none;
+      border-radius: 30px; padding: 16px; width: 100%;
+      font-size: 17px; font-weight: bold; cursor: pointer;
+      box-shadow: 0 4px 0 #E57381;
+    }
+    #manualBackBtn {
+      background: white; color: #E57381;
+      border: 2px solid #FFB7C5;
+      border-radius: 30px; padding: 10px; width: 100%;
+      font-size: 14px; font-weight: bold; cursor: pointer;
+      margin-top: 12px;
+    }
     #statusMsg {
       margin-top: 12px; font-size: 13px;
       color: var(--main-pink); font-weight: bold; min-height: 20px;
@@ -128,6 +155,16 @@
   <h2 style="color:var(--text-color); margin-bottom:6px;">カトレヤこども園</h2>
   <div style="font-size:13px; color:#aaa; margin-bottom:24px;">登降園管理システム</div>
   <button id="btn" onclick="start()" disabled>準備中...</button>
+  <button id="manualLink" onclick="openManual()">✏️ 手入力打刻（せんせい用）</button>
+</div>
+
+<div id="manualView" class="container" style="display:none;">
+  <div style="font-size:48px; margin-bottom:10px;">✏️</div>
+  <h2 style="color:var(--text-color); margin-bottom:6px;">手入力打刻</h2>
+  <div style="font-size:13px; color:#aaa;">QRが読めないときの救済用です</div>
+  <input id="manualId" type="text" placeholder="園児IDを入力" autocomplete="off">
+  <button id="manualSendBtn" onclick="manualPunch()">🕒 打刻する</button>
+  <button id="manualBackBtn" onclick="closeManual()">← もどる</button>
 </div>
 
 <div id="scanView" class="container" style="display:none;">
@@ -183,6 +220,13 @@
   warmUpServer();
   setInterval(warmUpServer, WARMUP_INTERVAL_MS);
 
+  // 手入力欄でEnterキーでも打刻できるようにする
+  document.addEventListener('DOMContentLoaded', () => {
+    document.getElementById('manualId').addEventListener('keydown', e => {
+      if (e.key === 'Enter') manualPunch();
+    });
+  });
+
   const btnCheckTimer = setInterval(() => {
     if (typeof jsQR !== 'undefined') {
       const b = document.getElementById('btn');
@@ -191,11 +235,8 @@
     }
   }, 300);
 
-  async function start() {
-    document.getElementById('startView').style.display = 'none';
-    document.getElementById('scanView').style.display  = 'block';
-    scanning = true;
-
+  // 音声の初期化（スキャン・手入力の両方から使う）
+  async function initAudio() {
     // AudioContextの生成（再開時は使い回す）
     if (!audioCtx) {
       audioCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -224,6 +265,35 @@
         }
       }
     }
+  }
+
+  // 【追加】手入力打刻（救済用）
+  function openManual() {
+    initAudio();  // 完了音を鳴らせるように準備（失敗しても打刻はできる）
+    document.getElementById('startView').style.display  = 'none';
+    document.getElementById('manualView').style.display = 'block';
+    document.getElementById('manualId').focus();
+  }
+
+  function closeManual() {
+    document.getElementById('manualView').style.display = 'none';
+    document.getElementById('startView').style.display  = 'block';
+  }
+
+  function manualPunch() {
+    const input = document.getElementById('manualId');
+    const id = input.value.trim();
+    if (!id) { input.focus(); return; }
+    input.value = '';
+    sendData(id);  // QR読取と同じ処理（結果表示・二重打刻防止もそのまま効く）
+  }
+
+  async function start() {
+    document.getElementById('startView').style.display = 'none';
+    document.getElementById('scanView').style.display  = 'block';
+    scanning = true;
+
+    await initAudio();
 
     try {
       const stream = await navigator.mediaDevices.getUserMedia({

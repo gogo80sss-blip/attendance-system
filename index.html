@@ -279,7 +279,11 @@
     const resp = await fetch(GAS_URL + '?mode=list');
     const data = await resp.json();
     if (!data || !Array.isArray(data.roster)) throw new Error('名簿の形式が不正');
-    rosterData = data;
+    // 見出し行の混入対策: IDが数値でない行（「児童ID」「クラス」等）は除外
+    const roster = data.roster.filter(r => r.id !== '' && !isNaN(Number(r.id)));
+    const classes = [];
+    roster.forEach(r => { if (classes.indexOf(r.c) === -1) classes.push(r.c); });
+    rosterData = { classes: classes, roster: roster };
     return rosterData;
   }
 
